@@ -3,6 +3,15 @@
 # dependencies
 node_modules/
 
+# Editor
+.idea
+# Emacs
+.emacs.d/
+.emacs
+*~
+.#*
+\#*
+
 # Expo
 .expo/
 dist/
@@ -48,6 +57,11 @@ yarn-error.*
 
 # Personal shell config
 .zshrc
+
+
+
+# Dart/Flutter
+.dart_tool/
 
 # Old training data
 assets/images/old_oranges_data/
