@@ -1,0 +1,11 @@
+! Git branch has uncommitted file changes
+› It's recommended to commit all changes before proceeding in case you want to revert generated changes.
+Git status is dirty but the command will continue because the terminal is not interactive.
+- Clearing android, ios
+✔ Cleared android, ios code
+- Creating native directories (./ios and ./android)
+files.map is not a function
+- Creating native directories (./ios and ./android)
+✖ Failed to create the native directories
+You may want to delete the ./ios and/or ./android directories before trying again.
+error: "expo" exited with code 1

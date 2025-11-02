@@ -36,10 +36,9 @@ export interface ClassificationResult {
   
   // Image quality
   imageQuality: {
-    isValid: boolean;
+    isHighQuality: boolean;
     resolution: { width: number; height: number };
-    brightness: number;
-    blur: number;
+    fileSize: number;
     issues: string[];
   };
   

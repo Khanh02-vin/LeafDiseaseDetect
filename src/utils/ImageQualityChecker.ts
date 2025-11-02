@@ -1,11 +1,11 @@
 import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system';
+import { Logger, LogCategory } from './Logger';
 
 export interface ImageQualityResult {
-  isValid: boolean;
+  isHighQuality: boolean;
   resolution: { width: number; height: number };
-  brightness: number;
-  blur: number;
+  fileSize: number;
   issues: string[];
 }
 
@@ -19,40 +19,48 @@ export class ImageQualityChecker {
     const issues: string[] = [];
     
     try {
-      // Get image dimensions
+      Logger.debug(LogCategory.IMAGE, `Starting quality check for image: ${imageUri}`);
+
       const dimensions = await this.getImageDimensions(imageUri);
+      Logger.debug(LogCategory.IMAGE, `Image dimensions: ${dimensions.width}x${dimensions.height}`);
       
-      // Check resolution
       if (dimensions.width < this.minWidth || dimensions.height < this.minHeight) {
         issues.push(`Image too small: ${dimensions.width}x${dimensions.height} (minimum: ${this.minWidth}x${this.minHeight})`);
       }
 
-      // Check brightness
+      const fileSize = await this.getFileSize(imageUri);
+      Logger.debug(LogCategory.IMAGE, `Image file size: ${(fileSize / 1024 / 1024).toFixed(2)}MB`);
+
       const brightness = await this.calculateBrightness(imageUri);
       if (brightness < this.minBrightness) {
         issues.push(`Image too dark: brightness ${brightness.toFixed(2)} (minimum: ${this.minBrightness})`);
       }
 
-      // Check blur (simplified)
       const blur = await this.calculateBlur(imageUri);
       if (blur > this.maxBlur) {
         issues.push(`Image too blurry: blur score ${blur.toFixed(2)} (maximum: ${this.maxBlur})`);
       }
 
+      const isHighQuality = issues.length === 0;
+      
+      if (isHighQuality) {
+        Logger.success(LogCategory.IMAGE, 'Image quality check passed');
+      } else {
+        Logger.warn(LogCategory.IMAGE, `Image quality issues found: ${issues.length}`, { issues });
+      }
+
       return {
-        isValid: issues.length === 0,
+        isHighQuality,
         resolution: dimensions,
-        brightness,
-        blur,
+        fileSize,
         issues,
       };
     } catch (error) {
-      console.error('Image quality check failed:', error);
+      Logger.error(LogCategory.IMAGE, 'Image quality check failed', error);
       return {
-        isValid: false,
+        isHighQuality: false,
         resolution: { width: 0, height: 0 },
-        brightness: 0,
-        blur: 1,
+        fileSize: 0,
         issues: [`Failed to analyze image: ${error}`],
       };
     }
@@ -70,6 +78,19 @@ export class ImageQualityChecker {
         }
       );
     });
+  }
+
+  private async getFileSize(imageUri: string): Promise<number> {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(imageUri);
+      if (fileInfo.exists && 'size' in fileInfo) {
+        return fileInfo.size;
+      }
+      return 0;
+    } catch (error) {
+      Logger.warn(LogCategory.IMAGE, 'Failed to get file size', error);
+      return 0;
+    }
   }
 
   private async calculateBrightness(imageUri: string): Promise<number> {

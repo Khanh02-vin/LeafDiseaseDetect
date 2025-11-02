@@ -1,6 +1,7 @@
 import { TensorFlowService } from './TensorFlowService';
 import { ClassificationResult } from '../models/ClassificationResult';
 import { ImageQualityChecker } from '../utils/ImageQualityChecker';
+import { Logger, LogCategory } from '../utils/Logger';
 import uuid from 'react-native-uuid';
 
 export class OrangeClassifier {
@@ -22,7 +23,9 @@ export class OrangeClassifier {
   }
 
   public async initialize(): Promise<void> {
+    Logger.info(LogCategory.INIT, 'OrangeClassifier initializing...');
     await this.tensorFlowService.initialize();
+    Logger.success(LogCategory.INIT, 'OrangeClassifier initialized');
   }
 
   public async classifyOrange(
@@ -32,7 +35,14 @@ export class OrangeClassifier {
     const startTime = Date.now();
     const id = uuid.v4() as string;
 
+    Logger.info(LogCategory.CLASSIFICATION, `Starting orange classification - ID: ${id}`);
+    if (location) {
+      Logger.debug(LogCategory.CLASSIFICATION, `Location provided: ${location.latitude}, ${location.longitude}`);
+    }
+
     try {
+      Logger.time('Orange Classification Pipeline');
+
       const qualityCheck = await this.imageQualityChecker.checkImageQuality(imageUri);
 
       const { predictions, processingTime } = await this.tensorFlowService.classifyImage(imageUri);
@@ -42,16 +52,22 @@ export class OrangeClassifier {
       }
 
       const best = predictions[0];
+      Logger.info(LogCategory.CLASSIFICATION, `Top prediction: ${best.label} (${(best.confidence * 100).toFixed(1)}%)`);
 
       const primaryResult = {
         label: best.label,
         confidence: best.confidence,
-        isOrange: /good|bad|quality/i.test(best.label),
+        isOrange: /orange/i.test(best.label),
       };
 
       const needsFallback = primaryResult.confidence < this.confidenceThreshold || !primaryResult.isOrange;
+      
+      if (needsFallback) {
+        Logger.warn(LogCategory.CLASSIFICATION, `Confidence below threshold (${this.confidenceThreshold}), using fallback`);
+      }
+
       const fallbackResult = needsFallback
-        ? { label: 'Color-based heuristic', confidence: 0.6, reason: 'Low confidence' }
+        ? { label: 'Low confidence result', confidence: 0.6, reason: `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%` }
         : undefined;
 
       const qualityAnalysis = {
@@ -65,6 +81,12 @@ export class OrangeClassifier {
         },
       };
 
+      Logger.debug(LogCategory.CLASSIFICATION, `Quality analysis: ${qualityAnalysis.isGoodQuality ? 'Good' : 'Bad'}, Mold: ${qualityAnalysis.hasMold}`);
+
+      const totalTime = processingTime + (Date.now() - startTime);
+      Logger.timeEnd('Orange Classification Pipeline');
+      Logger.success(LogCategory.CLASSIFICATION, `Classification completed in ${totalTime}ms`);
+
       return {
         id,
         imageUri,
@@ -74,14 +96,16 @@ export class OrangeClassifier {
         fallbackResult,
         qualityAnalysis,
         imageQuality: qualityCheck,
-        processingTime: processingTime + (Date.now() - startTime),
-        modelVersion: 'fallback-1.0.0',
+        processingTime: totalTime,
+        modelVersion: this.tensorFlowService.getModelInfo().modelVersion,
         preprocessingApplied: ['resize', 'normalize'],
       };
     } catch (error) {
-      console.error('Classification failed:', error);
+      Logger.error(LogCategory.CLASSIFICATION, 'Classification failed', error);
       
-      // Return a safe fallback result
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      Logger.error(LogCategory.CLASSIFICATION, `Error details: ${errorMessage}`);
+      
       return {
         id,
         imageUri,
@@ -95,7 +119,7 @@ export class OrangeClassifier {
         fallbackResult: {
           label: 'Analysis failed',
           confidence: 0.0,
-          reason: error instanceof Error ? error.message : 'Unknown error',
+          reason: errorMessage,
         },
         qualityAnalysis: {
           isGoodQuality: false,
@@ -114,14 +138,16 @@ export class OrangeClassifier {
           issues: ['Analysis failed'],
         },
         processingTime: Date.now() - startTime,
-        modelVersion: 'fallback-1.0.0',
+        modelVersion: 'error',
         preprocessingApplied: [],
       };
     }
   }
 
   public setConfidenceThreshold(threshold: number): void {
+    const oldThreshold = this.confidenceThreshold;
     this.confidenceThreshold = Math.max(0, Math.min(1, threshold));
+    Logger.info(LogCategory.CLASSIFICATION, `Confidence threshold updated: ${oldThreshold} -> ${this.confidenceThreshold}`);
   }
 
   public getConfidenceThreshold(): number {

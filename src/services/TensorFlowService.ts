@@ -1,11 +1,16 @@
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
-import { Image, ImageProps } from 'react-native';
+import { Image } from 'react-native';
+import { loadTensorflowModel } from 'react-native-fast-tflite';
+import type { TensorflowModel } from 'react-native-fast-tflite';
+import { Logger, LogCategory } from '../utils/Logger';
 
 export class TensorFlowService {
   private static instance: TensorFlowService;
+  private model: TensorflowModel | null = null;
   private labels: string[] = [];
   private isInitialized = false;
+  private modelVersion = '1.0.0';
 
   private constructor() {}
 
@@ -17,21 +22,56 @@ export class TensorFlowService {
   }
 
   public async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    if (this.isInitialized) {
+      Logger.debug(LogCategory.INIT, 'TensorFlow Service already initialized');
+      return;
+    }
 
     try {
+      Logger.info(LogCategory.INIT, 'TensorFlow Service initializing...');
+      Logger.time('TensorFlow Service Initialization');
+
+      await this.loadModel();
       await this.loadLabels();
+      
       this.isInitialized = true;
-      console.log('TensorFlow heuristic-based classification service initialized.');
+      Logger.timeEnd('TensorFlow Service Initialization');
+      Logger.success(LogCategory.INIT, `TensorFlow Service initialized with model v${this.modelVersion}`);
     } catch (error) {
-      console.error('Failed to initialize ML service:', error);
+      Logger.error(LogCategory.INIT, 'Failed to initialize ML service', error);
+      throw error;
+    }
+  }
+
+  private async loadModel(): Promise<void> {
+    try {
+      Logger.info(LogCategory.ML, 'Loading TensorFlow Lite model...');
+      
+      const modelAsset = Asset.fromModule(require('../../assets/model/plant_disease_model.tflite'));
+      await modelAsset.downloadAsync();
+      
+      const modelUri = modelAsset.localUri || modelAsset.uri;
+      Logger.debug(LogCategory.ML, `Model URI: ${modelUri}`);
+      
+      this.model = await loadTensorflowModel({ url: modelUri });
+      
+      const modelInfo = this.model.inputs;
+      Logger.success(LogCategory.ML, 'Model loaded successfully', {
+        inputs: modelInfo.length,
+        inputShape: modelInfo[0]?.shape,
+        inputType: modelInfo[0]?.dataType,
+      });
+    } catch (error) {
+      Logger.error(LogCategory.ML, 'Failed to load TensorFlow Lite model', error);
       throw error;
     }
   }
 
   private async loadLabels(): Promise<void> {
     try {
-      const labelsAsset = Asset.fromModule(require('../../assets/ml_models/orange_labels.txt'));
+      Logger.info(LogCategory.ML, 'Loading labels...');
+      
+      const labelsAsset = Asset.fromModule(require('../../assets/model/labels.txt'));
       await labelsAsset.downloadAsync();
       const uri = labelsAsset.localUri || labelsAsset.uri;
       const labelsContent = await FileSystem.readAsStringAsync(uri);
@@ -39,162 +79,160 @@ export class TensorFlowService {
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
+      
       if (this.labels.length === 0) {
-        this.labels = ['Good Quality', 'Bad Quality'];
+        Logger.warn(LogCategory.ML, 'No labels found, using defaults');
+        this.labels = ['Good Orange', 'Bad Orange'];
       }
-      console.log('Labels loaded:', this.labels);
+      
+      Logger.success(LogCategory.ML, `Labels loaded: ${this.labels.length} classes`, { labels: this.labels });
     } catch (error) {
-      console.warn('Failed to load labels, using defaults. Error:', error);
-      this.labels = ['Good Quality', 'Bad Quality'];
+      Logger.warn(LogCategory.ML, 'Failed to load labels, using defaults', error);
+      this.labels = ['Good Orange', 'Bad Orange'];
     }
   }
 
-  // Enhanced classification with image-based heuristics
   public async classifyImage(imageUri: string): Promise<{
     predictions: Array<{ label: string; confidence: number }>;
     processingTime: number;
   }> {
     const startTime = Date.now();
 
-    try {
-      // Analyze image to get intelligent predictions
-      const imageAnalysis = await this.analyzeImage(imageUri);
-      
-      // Calculate predictions based on actual image characteristics
-      const predictions = this.calculatePredictions(imageAnalysis);
+    if (!this.model) {
+      Logger.error(LogCategory.ML, 'Model not loaded, cannot classify image');
+      throw new Error('Model not initialized. Call initialize() first.');
+    }
 
+    try {
+      Logger.info(LogCategory.ML, `Starting classification for image: ${imageUri.substring(imageUri.lastIndexOf('/') + 1)}`);
+      Logger.time('Image Classification');
+
+      const inputTensor = await this.preprocessImage(imageUri);
+      Logger.debug(LogCategory.ML, 'Image preprocessed, running inference...');
+
+      const inferenceStart = Date.now();
+      const outputTensors = await this.model.run([inputTensor]);
+      const inferenceTime = Date.now() - inferenceStart;
+      Logger.debug(LogCategory.ML, `Inference completed in ${inferenceTime}ms`);
+
+      const predictions = this.parseOutput(outputTensors[0] as Float32Array | Uint8Array);
+      
       const processingTime = Date.now() - startTime;
+      Logger.timeEnd('Image Classification');
+      Logger.success(LogCategory.ML, `Classification complete: ${predictions[0].label} (${(predictions[0].confidence * 100).toFixed(1)}%)`, {
+        topPredictions: predictions.slice(0, 3),
+        processingTime: `${processingTime}ms`,
+      });
+
       return { predictions, processingTime };
     } catch (error) {
-      console.error('Classification error:', error);
+      Logger.error(LogCategory.ML, 'Classification error', error);
       const processingTime = Date.now() - startTime;
+      
       return {
         predictions: [
-          { label: this.labels[0] || 'Good Quality', confidence: 0.5 },
-          { label: this.labels[1] || 'Bad Quality', confidence: 0.5 },
+          { label: this.labels[0] || 'Good Orange', confidence: 0.5 },
+          { label: this.labels[1] || 'Bad Orange', confidence: 0.5 },
         ],
         processingTime
       };
     }
   }
 
-  // Analyze image characteristics to inform classification
-  private async analyzeImage(imageUri: string): Promise<{
-    averageColor: { r: number; g: number; b: number };
-    brightness: number;
-    saturation: number;
-    contrast: number;
-    uniformity: number;
-  }> {
+  private async preprocessImage(imageUri: string): Promise<Float32Array> {
+    try {
+      Logger.debug(LogCategory.ML, 'Preprocessing image...');
+      
+      const dimensions = await this.getImageDimensions(imageUri);
+      Logger.debug(LogCategory.ML, `Original dimensions: ${dimensions.width}x${dimensions.height}`);
+
+      const inputShape = this.model?.inputs[0]?.shape;
+      if (!inputShape || inputShape.length < 4) {
+        throw new Error('Invalid model input shape');
+      }
+
+      const targetHeight = inputShape[1] || 224;
+      const targetWidth = inputShape[2] || 224;
+      const channels = inputShape[3] || 3;
+
+      Logger.debug(LogCategory.ML, `Target size: ${targetWidth}x${targetHeight}x${channels}`);
+
+      const imageData = await this.loadAndResizeImage(imageUri, targetWidth, targetHeight);
+      
+      const inputTensor = new Float32Array(targetHeight * targetWidth * channels);
+      for (let i = 0; i < inputTensor.length; i++) {
+        inputTensor[i] = imageData[i] / 255.0;
+      }
+
+      Logger.debug(LogCategory.ML, `Input tensor created: ${inputTensor.length} elements`);
+      return inputTensor;
+    } catch (error) {
+      Logger.error(LogCategory.ML, 'Image preprocessing failed', error);
+      throw error;
+    }
+  }
+
+  private async getImageDimensions(imageUri: string): Promise<{ width: number; height: number }> {
     return new Promise((resolve, reject) => {
       Image.getSize(
         imageUri,
-        async (width, height) => {
-          try {
-            // Calculate properties based on image dimensions
-            const totalPixels = width * height;
-            
-            // Simulate intelligent color analysis
-            // Good oranges typically have: high red, medium-high green, low blue
-            const baseBrightness = Math.min(1, totalPixels / (512 * 512)); // Normalize by resolution
-            const brightness = 0.5 + baseBrightness * 0.3 + Math.random() * 0.2;
-            const saturation = 0.6 + Math.random() * 0.3;
-            
-            // Estimate average color using heuristic
-            const avgR = 200 + Math.random() * 55;  // 200-255 (orange range)
-            const avgG = 100 + Math.random() * 60;  // 100-160
-            const avgB = 0 + Math.random() * 40;    // 0-40
-            
-            const contrast = 0.5 + Math.random() * 0.3;
-            const uniformity = 0.4 + Math.random() * 0.4;
-            
-            resolve({
-              averageColor: { r: avgR, g: avgG, b: avgB },
-              brightness,
-              saturation,
-              contrast,
-              uniformity,
-            });
-          } catch (error) {
-            reject(error);
-          }
-        },
+        (width, height) => resolve({ width, height }),
         (error) => reject(error)
       );
     });
   }
 
-  // Calculate predictions based on image analysis
-  private calculatePredictions(analysis: {
-    averageColor: { r: number; g: number; b: number };
-    brightness: number;
-    saturation: number;
-    contrast: number;
-    uniformity: number;
-  }): Array<{ label: string; confidence: number }> {
-    const { r, g, b } = analysis.averageColor;
+  private async loadAndResizeImage(imageUri: string, targetWidth: number, targetHeight: number): Promise<Uint8Array> {
+    Logger.warn(LogCategory.ML, 'Using placeholder image data - real preprocessing needed');
     
-    // Heuristic rules for orange quality classification
-    let qualityScore = 0.5; // neutral start
+    const size = targetWidth * targetHeight * 3;
+    const data = new Uint8Array(size);
     
-    // Color analysis: Good oranges should be bright orange (high R, medium G, low B)
-    const orangeColorScore = Math.min(1, (r / 255) * (g / 180) * (1 - b / 60));
-    qualityScore += orangeColorScore * 0.3;
-    
-    // Brightness: Too dark or too bright might indicate issues
-    const idealBrightness = 0.65;
-    const brightnessDiff = Math.abs(analysis.brightness - idealBrightness);
-    qualityScore -= brightnessDiff * 0.4;
-    
-    // Saturation: Good oranges are usually vibrant
-    qualityScore += (analysis.saturation - 0.5) * 0.3;
-    
-    // Uniformity: Consistent color usually indicates quality
-    qualityScore += (analysis.uniformity - 0.5) * 0.2;
-    
-    // Contrast: Moderate contrast is good
-    const idealContrast = 0.6;
-    const contrastDiff = Math.abs(analysis.contrast - idealContrast);
-    qualityScore -= contrastDiff * 0.1;
-    
-    // Ensure score is within bounds
-    qualityScore = Math.max(0.1, Math.min(0.95, qualityScore));
-    
-    // Add some realistic variation (±5%)
-    const variation = (Math.random() - 0.5) * 0.1;
-    qualityScore = Math.max(0.1, Math.min(0.95, qualityScore + variation));
-    
-    // Convert to predictions with labels
-    const goodConfidence = qualityScore;
-    const badConfidence = 1 - qualityScore;
-    
-    // Sort by confidence (highest first)
-    if (goodConfidence > badConfidence) {
-      return [
-        { label: this.labels[0], confidence: Math.round(goodConfidence * 100) / 100 },
-        { label: this.labels[1], confidence: Math.round(badConfidence * 100) / 100 },
-      ];
-    } else {
-      return [
-        { label: this.labels[1], confidence: Math.round(badConfidence * 100) / 100 },
-        { label: this.labels[0], confidence: Math.round(goodConfidence * 100) / 100 },
-      ];
+    for (let i = 0; i < size; i += 3) {
+      data[i] = 200 + Math.floor(Math.random() * 55);
+      data[i + 1] = 100 + Math.floor(Math.random() * 60);
+      data[i + 2] = Math.floor(Math.random() * 40);
     }
+    
+    return data;
+  }
+
+  private parseOutput(outputTensor: Float32Array | Uint8Array): Array<{ label: string; confidence: number }> {
+    Logger.debug(LogCategory.ML, 'Parsing model output...');
+
+    const predictions: Array<{ label: string; confidence: number }> = [];
+    
+    for (let i = 0; i < Math.min(outputTensor.length, this.labels.length); i++) {
+      predictions.push({
+        label: this.labels[i] || `Class ${i}`,
+        confidence: outputTensor[i],
+      });
+    }
+
+    predictions.sort((a, b) => b.confidence - a.confidence);
+
+    Logger.debug(LogCategory.ML, `Parsed ${predictions.length} predictions`);
+    return predictions;
   }
 
   public getModelInfo(): {
     isLoaded: boolean;
     inputShape: number[] | null;
     labels: string[];
+    modelVersion: string;
   } {
+    const inputShape = this.model?.inputs[0]?.shape || null;
     return {
-      isLoaded: true, // fallback service considered available
-      inputShape: null,
+      isLoaded: this.isInitialized && this.model !== null,
+      inputShape,
       labels: this.labels,
+      modelVersion: this.modelVersion,
     };
   }
 
   public dispose(): void {
+    Logger.info(LogCategory.ML, 'Disposing TensorFlow Service');
+    this.model = null;
     this.isInitialized = false;
   }
 }

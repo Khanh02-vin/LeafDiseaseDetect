@@ -39,7 +39,7 @@ export const HistoryScreen: React.FC = () => {
     clearHistory();
   }, [clearHistory]);
 
-  const renderHistoryItem = useCallback(({ item }) => (
+  const renderHistoryItem = useCallback(({ item }: { item: any }) => (
     <ScanHistoryItem
       result={item.result}
       onPress={() => handleItemPress(item.id)}
