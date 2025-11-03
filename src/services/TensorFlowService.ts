@@ -211,9 +211,9 @@ export class TensorFlowService {
   private async extractPixelDataFromImage(imageUri: string, width: number, height: number): Promise<Uint8Array> {
     try {
       // Read image file as base64
-      // expo-file-system v19+ uses different API - read binary data directly
+      // Using legacy API for compatibility with Expo SDK 54
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: 'base64' as any,
+        encoding: 'base64',
       });
       
       // Decode base64 to binary file bytes
