@@ -4,8 +4,8 @@ import { ImageQualityChecker } from '../utils/ImageQualityChecker';
 import { Logger, LogCategory } from '../utils/Logger';
 import uuid from 'react-native-uuid';
 
-export class OrangeClassifier {
-  private static instance: OrangeClassifier;
+export class LeafClassifier {
+  private static instance: LeafClassifier;
   private tensorFlowService: TensorFlowService;
   private imageQualityChecker: ImageQualityChecker;
   private confidenceThreshold = 0.3;
@@ -15,33 +15,33 @@ export class OrangeClassifier {
     this.imageQualityChecker = new ImageQualityChecker();
   }
 
-  public static getInstance(): OrangeClassifier {
-    if (!OrangeClassifier.instance) {
-      OrangeClassifier.instance = new OrangeClassifier();
+  public static getInstance(): LeafClassifier {
+    if (!LeafClassifier.instance) {
+      LeafClassifier.instance = new LeafClassifier();
     }
-    return OrangeClassifier.instance;
+    return LeafClassifier.instance;
   }
 
   public async initialize(): Promise<void> {
-    Logger.info(LogCategory.INIT, 'OrangeClassifier initializing...');
+    Logger.info(LogCategory.INIT, 'LeafClassifier initializing...');
     await this.tensorFlowService.initialize();
-    Logger.success(LogCategory.INIT, 'OrangeClassifier initialized');
+    Logger.success(LogCategory.INIT, 'LeafClassifier initialized');
   }
 
-  public async classifyOrange(
+  public async classifyLeaf(
     imageUri: string,
     location?: { latitude: number; longitude: number; address?: string }
   ): Promise<ClassificationResult> {
     const startTime = Date.now();
     const id = uuid.v4() as string;
 
-    Logger.info(LogCategory.CLASSIFICATION, `Starting orange classification - ID: ${id}`);
+    Logger.info(LogCategory.CLASSIFICATION, `Starting leaf classification - ID: ${id}`);
     if (location) {
       Logger.debug(LogCategory.CLASSIFICATION, `Location provided: ${location.latitude}, ${location.longitude}`);
     }
 
     try {
-      Logger.time('Orange Classification Pipeline');
+      Logger.time('Leaf Classification Pipeline');
 
       const qualityCheck = await this.imageQualityChecker.checkImageQuality(imageUri);
 
@@ -57,10 +57,10 @@ export class OrangeClassifier {
       const primaryResult = {
         label: best.label,
         confidence: best.confidence,
-        isOrange: /orange/i.test(best.label),
+        isLeaf: /leaf|plant/i.test(best.label),
       };
 
-      const needsFallback = primaryResult.confidence < this.confidenceThreshold || !primaryResult.isOrange;
+      const needsFallback = primaryResult.confidence < this.confidenceThreshold || !primaryResult.isLeaf;
       
       if (needsFallback) {
         Logger.warn(LogCategory.CLASSIFICATION, `Confidence below threshold (${this.confidenceThreshold}), using fallback`);
@@ -71,20 +71,20 @@ export class OrangeClassifier {
         : undefined;
 
       const qualityAnalysis = {
-        isGoodQuality: /good/i.test(primaryResult.label),
-        hasMold: /mold|rotten|bad/i.test(primaryResult.label),
-        moldConfidence: /mold|bad/i.test(primaryResult.label) ? 0.6 : 0.2,
+        isHealthy: /good|healthy/i.test(primaryResult.label),
+        hasDiseased: /disease|bad|sick|infected/i.test(primaryResult.label),
+        diseaseConfidence: /disease|bad|sick/i.test(primaryResult.label) ? 0.6 : 0.2,
         colorAnalysis: {
-          dominantColor: 'orange',
+          dominantColor: 'green',
           brightness: 0.7,
           saturation: 0.8,
         },
       };
 
-      Logger.debug(LogCategory.CLASSIFICATION, `Quality analysis: ${qualityAnalysis.isGoodQuality ? 'Good' : 'Bad'}, Mold: ${qualityAnalysis.hasMold}`);
+      Logger.debug(LogCategory.CLASSIFICATION, `Quality analysis: ${qualityAnalysis.isHealthy ? 'Healthy' : 'Diseased'}, Disease: ${qualityAnalysis.hasDiseased}`);
 
       const totalTime = processingTime + (Date.now() - startTime);
-      Logger.timeEnd('Orange Classification Pipeline');
+      Logger.timeEnd('Leaf Classification Pipeline');
       Logger.success(LogCategory.CLASSIFICATION, `Classification completed in ${totalTime}ms`);
 
       return {
@@ -114,7 +114,7 @@ export class OrangeClassifier {
         primaryResult: {
           label: 'Unable to analyze',
           confidence: 0.0,
-          isOrange: false,
+          isLeaf: false,
         },
         fallbackResult: {
           label: 'Analysis failed',
@@ -122,9 +122,9 @@ export class OrangeClassifier {
           reason: errorMessage,
         },
         qualityAnalysis: {
-          isGoodQuality: false,
-          hasMold: false,
-          moldConfidence: 0.0,
+          isHealthy: false,
+          hasDiseased: false,
+          diseaseConfidence: 0.0,
           colorAnalysis: {
             dominantColor: 'unknown',
             brightness: 0.0,

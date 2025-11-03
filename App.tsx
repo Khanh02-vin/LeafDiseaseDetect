@@ -8,10 +8,10 @@ export default function App() {
   useEffect(() => {
     if (__DEV__) {
       Logger.setLevel(LogLevel.DEBUG);
-      Logger.info(LogCategory.APP, 'OrangeDetect application started in development mode');
+      Logger.info(LogCategory.APP, 'Leaf Disease Checker application started in development mode');
     } else {
       Logger.setLevel(LogLevel.INFO);
-      Logger.info(LogCategory.APP, 'OrangeDetect application started in production mode');
+      Logger.info(LogCategory.APP, 'Leaf Disease Checker application started in production mode');
     }
 
     const modelInfo = {

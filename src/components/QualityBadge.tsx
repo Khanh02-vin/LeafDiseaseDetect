@@ -3,39 +3,39 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../constants/colors';
 
 interface QualityBadgeProps {
-  isGoodQuality: boolean;
-  hasMold?: boolean;
+  isHealthy: boolean;
+  hasDiseased?: boolean;
   confidence?: number;
   size?: 'small' | 'medium' | 'large';
 }
 
 export const QualityBadge: React.FC<QualityBadgeProps> = ({
-  isGoodQuality,
-  hasMold = false,
+  isHealthy,
+  hasDiseased = false,
   confidence,
   size = 'medium',
 }) => {
   const getBadgeInfo = () => {
-    if (hasMold) {
+    if (hasDiseased) {
       return {
-        text: 'Mold Detected',
-        color: Colors.mold,
-        backgroundColor: Colors.mold + '20',
+        text: 'Disease Detected',
+        color: Colors.badQuality,
+        backgroundColor: Colors.badQuality + '20',
       };
     }
     
-    if (isGoodQuality) {
+    if (isHealthy) {
       return {
-        text: 'Good Quality',
+        text: 'Healthy Leaf',
         color: Colors.goodQuality,
         backgroundColor: Colors.goodQuality + '20',
       };
     }
     
     return {
-      text: 'Bad Quality',
-      color: Colors.badQuality,
-      backgroundColor: Colors.badQuality + '20',
+      text: 'Unhealthy',
+      color: Colors.warning,
+      backgroundColor: Colors.warning + '20',
     };
   };
 

@@ -83,13 +83,13 @@ export class TensorFlowService {
       
       if (this.labels.length === 0) {
         Logger.warn(LogCategory.ML, 'No labels found, using defaults');
-        this.labels = ['Good Orange', 'Bad Orange'];
+        this.labels = ['Healthy Leaf', 'Diseased Leaf'];
       }
       
       Logger.success(LogCategory.ML, `Labels loaded: ${this.labels.length} classes`, { labels: this.labels });
     } catch (error) {
       Logger.warn(LogCategory.ML, 'Failed to load labels, using defaults', error);
-      this.labels = ['Good Orange', 'Bad Orange'];
+      this.labels = ['Healthy Leaf', 'Diseased Leaf'];
     }
   }
 
@@ -132,8 +132,8 @@ export class TensorFlowService {
       
       return {
         predictions: [
-          { label: this.labels[0] || 'Good Orange', confidence: 0.5 },
-          { label: this.labels[1] || 'Bad Orange', confidence: 0.5 },
+          { label: this.labels[0] || 'Healthy Leaf', confidence: 0.5 },
+          { label: this.labels[1] || 'Diseased Leaf', confidence: 0.5 },
         ],
         processingTime
       };

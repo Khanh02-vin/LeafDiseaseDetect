@@ -1,8 +1,8 @@
 export const Colors = {
-  // Primary colors
-  primary: '#FF8C00',
-  primaryDark: '#E67E00',
-  primaryLight: '#FFA500',
+  // Primary colors (Green for leaf theme)
+  primary: '#4CAF50',
+  primaryDark: '#388E3C',
+  primaryLight: '#66BB6A',
   
   // Background colors
   background: '#FFFFFF',
@@ -26,10 +26,10 @@ export const Colors = {
   error: '#F44336',
   info: '#2196F3',
   
-  // Quality colors
+  // Health status colors
   goodQuality: '#4CAF50',
   badQuality: '#F44336',
-  mold: '#8B4513',
+  disease: '#FF5722',
   
   // Border colors
   border: '#E0E0E0',

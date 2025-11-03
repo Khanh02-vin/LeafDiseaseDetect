@@ -11,14 +11,14 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppStore } from '../store/useAppStore';
-import { OrangeClassifier } from '../services/OrangeClassifier';
+import { LeafClassifier } from '../services/LeafClassifier';
 import { Button } from '../components/Button';
 import { QualityBadge } from '../components/QualityBadge';
 import { Colors } from '../constants/colors';
 
 const { width, height } = Dimensions.get('window');
 
-export const ColorDetectorScreen: React.FC = () => {
+export const LeafDetectorScreen: React.FC = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -29,10 +29,11 @@ export const ColorDetectorScreen: React.FC = () => {
     addToHistory, 
     setLoading, 
     setError,
-    isLoading 
+    isLoading,
+    currentScan
   } = useAppStore();
 
-  const orangeClassifier = OrangeClassifier.getInstance();
+  const leafClassifier = LeafClassifier.getInstance();
 
   const requestCameraPermission = useCallback(async () => {
     await requestPermission();
@@ -81,7 +82,7 @@ export const ColorDetectorScreen: React.FC = () => {
       setIsProcessing(true);
       setLoading(true);
       
-      const result = await orangeClassifier.classifyOrange(capturedImage);
+      const result = await leafClassifier.classifyLeaf(capturedImage);
       
       setCurrentScan(result);
       addToHistory(result);
@@ -91,20 +92,21 @@ export const ColorDetectorScreen: React.FC = () => {
       
     } catch (error) {
       console.error('Analysis failed:', error);
-      Alert.alert('Analysis Failed', 'Unable to analyze the image. Please try again.');
+      Alert.alert('Analysis Failed', 'Unable to analyze the leaf. Please try again.');
     } finally {
       setIsProcessing(false);
       setLoading(false);
     }
-  }, [capturedImage, orangeClassifier, setCurrentScan, addToHistory, setLoading]);
+  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading]);
 
   const resetCamera = useCallback(() => {
     setCapturedImage(null);
-  }, []);
+    setCurrentScan(null);
+  }, [setCurrentScan]);
 
   React.useEffect(() => {
-    orangeClassifier.initialize();
-  }, [orangeClassifier]);
+    leafClassifier.initialize();
+  }, [leafClassifier]);
 
   if (!permission) {
     return (
@@ -125,27 +127,79 @@ export const ColorDetectorScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Orange Quality Detector</Text>
-      <Text style={styles.subtitle}>Capture or select an image to analyze</Text>
+      <Text style={styles.title}>Leaf Disease Detector</Text>
+      <Text style={styles.subtitle}>Capture or select a leaf image to analyze</Text>
 
       {capturedImage ? (
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: capturedImage }} style={styles.image} />
-          <View style={styles.imageOverlay}>
-            <Button
-              title="Analyze"
-              onPress={analyzeImage}
-              loading={isProcessing}
-              disabled={isProcessing}
-              style={styles.analyzeButton}
-            />
-            <Button
-              title="Retake"
-              onPress={resetCamera}
-              variant="outline"
-              style={styles.retakeButton}
-            />
+        <View>
+          <View style={styles.imageContainer}>
+            <Image source={{ uri: capturedImage }} style={styles.image} />
+            <View style={styles.imageOverlay}>
+              <Button
+                title="Analyze"
+                onPress={analyzeImage}
+                loading={isProcessing}
+                disabled={isProcessing}
+                style={styles.analyzeButton}
+              />
+              <Button
+                title="Retake"
+                onPress={resetCamera}
+                variant="outline"
+                style={styles.retakeButton}
+              />
+            </View>
           </View>
+
+          {/* Results Display */}
+          {currentScan && !isProcessing && (
+            <View style={styles.resultsContainer}>
+              <Text style={styles.resultsTitle}>Analysis Results</Text>
+              
+              <View style={styles.resultCard}>
+                <QualityBadge
+                  isHealthy={currentScan.qualityAnalysis.isHealthy}
+                  hasDiseased={currentScan.qualityAnalysis.hasDiseased}
+                  confidence={currentScan.primaryResult.confidence}
+                  size="large"
+                />
+                
+                <View style={styles.resultDetails}>
+                  <View style={styles.resultRow}>
+                    <Text style={styles.resultLabel}>Diagnosis:</Text>
+                    <Text style={styles.resultValue}>{currentScan.primaryResult.label}</Text>
+                  </View>
+                  
+                  <View style={styles.resultRow}>
+                    <Text style={styles.resultLabel}>Confidence:</Text>
+                    <Text style={styles.resultValue}>
+                      {(currentScan.primaryResult.confidence * 100).toFixed(1)}%
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.resultRow}>
+                    <Text style={styles.resultLabel}>Processing Time:</Text>
+                    <Text style={styles.resultValue}>{currentScan.processingTime}ms</Text>
+                  </View>
+                  
+                  {currentScan.qualityAnalysis.diseaseConfidence !== undefined && (
+                    <View style={styles.resultRow}>
+                      <Text style={styles.resultLabel}>Disease Level:</Text>
+                      <Text style={styles.resultValue}>
+                        {(currentScan.qualityAnalysis.diseaseConfidence * 100).toFixed(0)}%
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                
+                {currentScan.fallbackResult && (
+                  <View style={styles.fallbackAlert}>
+                    <Text style={styles.fallbackText}>⚠️ {currentScan.fallbackResult.reason}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </View>
       ) : (
         <View style={styles.cameraContainer}>
@@ -157,11 +211,11 @@ export const ColorDetectorScreen: React.FC = () => {
           
           {/* Overlay positioned absolutely over camera */}
           <View style={styles.cameraOverlay}>
-            {/* Orange detection circle overlay */}
+            {/* Leaf detection frame overlay */}
             <View style={styles.detectionOverlay}>
-              <View style={styles.detectionCircle}>
-                <View style={styles.circleBorder} />
-                <Text style={styles.detectionText}>Position orange here</Text>
+              <View style={styles.detectionFrame}>
+                <View style={styles.frameBorder} />
+                <Text style={styles.detectionText}>Position leaf here</Text>
               </View>
             </View>
             
@@ -187,7 +241,7 @@ export const ColorDetectorScreen: React.FC = () => {
       <View style={styles.instructions}>
         <Text style={styles.instructionTitle}>How to use:</Text>
         <Text style={styles.instructionText}>
-          1. Position the orange in the center of the frame
+          1. Position the plant leaf in the center of the frame
         </Text>
         <Text style={styles.instructionText}>
           2. Ensure good lighting for best results
@@ -196,7 +250,7 @@ export const ColorDetectorScreen: React.FC = () => {
           3. Tap capture or select from gallery
         </Text>
         <Text style={styles.instructionText}>
-          4. Wait for analysis to complete
+          4. Wait for disease analysis to complete
         </Text>
       </View>
     </ScrollView>
@@ -265,25 +319,25 @@ const styles = StyleSheet.create({
     paddingTop: 40,
   },
   
-  detectionCircle: {
-    width: 200,
-    height: 200,
+  detectionFrame: {
+    width: 220,
+    height: 180,
     justifyContent: 'center',
     alignItems: 'center',
   },
   
-  circleBorder: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+  frameBorder: {
+    width: 220,
+    height: 180,
+    borderRadius: 20,
     borderWidth: 3,
-    borderColor: '#FF6B35',
+    borderColor: '#4CAF50',
     borderStyle: 'dashed',
     position: 'absolute',
   },
   
   detectionText: {
-    color: '#FF6B35',
+    color: '#4CAF50',
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
@@ -362,5 +416,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginBottom: 4,
+  },
+  
+  resultsContainer: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  
+  resultsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  
+  resultCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  resultDetails: {
+    marginTop: 16,
+  },
+  
+  resultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  
+  resultLabel: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  
+  resultValue: {
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  
+  fallbackAlert: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: Colors.warning + '20',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.warning,
+  },
+  
+  fallbackText: {
+    fontSize: 13,
+    color: Colors.warning,
+    fontStyle: 'italic',
   },
 });

@@ -1,5 +1,5 @@
 {
-  "name": "orangedetectrn",
+  "name": "leaf-disease-checker",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {

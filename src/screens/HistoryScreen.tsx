@@ -51,8 +51,8 @@ export const HistoryScreen: React.FC = () => {
   const renderEmptyState = () => (
     <EmptyState
       title="No scans yet"
-      subtitle="Start by capturing an orange image to analyze its quality"
-      icon="🍊"
+      subtitle="Start by capturing a leaf image to analyze its health"
+      icon="🌿"
       action={
         <Button
           title="Start Scanning"

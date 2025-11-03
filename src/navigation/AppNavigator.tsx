@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { ColorDetectorScreen } from '../screens/ColorDetectorScreen';
+import { LeafDetectorScreen } from '../screens/LeafDetectorScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
@@ -56,9 +56,9 @@ const TabNavigator = () => {
     >
       <Tab.Screen
         name="Detector"
-        component={ColorDetectorScreen}
+        component={LeafDetectorScreen}
         options={{
-          title: 'Orange Detector',
+          title: 'Leaf Detector',
           headerShown: false,
         }}
       />
