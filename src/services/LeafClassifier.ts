@@ -1,6 +1,7 @@
 import { TensorFlowService } from './TensorFlowService';
 import { ClassificationResult } from '../models/ClassificationResult';
 import { ImageQualityChecker } from '../utils/ImageQualityChecker';
+import { LeafDetector } from '../utils/LeafDetector';
 import { Logger, LogCategory } from '../utils/Logger';
 import uuid from 'react-native-uuid';
 
@@ -8,7 +9,7 @@ export class LeafClassifier {
   private static instance: LeafClassifier;
   private tensorFlowService: TensorFlowService;
   private imageQualityChecker: ImageQualityChecker;
-  private confidenceThreshold = 0.3;
+  private confidenceThreshold = 0.75;
 
   private constructor() {
     this.tensorFlowService = TensorFlowService.getInstance();
@@ -45,6 +46,45 @@ export class LeafClassifier {
 
       const qualityCheck = await this.imageQualityChecker.checkImageQuality(imageUri);
 
+      // Pre-validation: Color-based leaf detection (skip expensive ML inference if not a leaf)
+      const isLikelyLeaf = await LeafDetector.isLikelyLeaf(imageUri);
+      
+      if (!isLikelyLeaf) {
+        Logger.warn(LogCategory.CLASSIFICATION, 'Image rejected by color-based detection (insufficient green pixels)');
+        Logger.timeEnd('Leaf Classification Pipeline');
+        
+        return {
+          id,
+          imageUri,
+          timestamp: new Date(),
+          location,
+          primaryResult: {
+            label: 'Not a Leaf',
+            confidence: 0.0,
+            isLeaf: false,
+          },
+          fallbackResult: {
+            label: 'Not a Leaf - Color Analysis',
+            confidence: 0.0,
+            reason: 'Image does not contain sufficient green pixels to be a leaf',
+          },
+          qualityAnalysis: {
+            isHealthy: false,
+            hasDiseased: false,
+            diseaseConfidence: 0.0,
+            colorAnalysis: {
+              dominantColor: 'unknown',
+              brightness: 0.0,
+              saturation: 0.0,
+            },
+          },
+          imageQuality: qualityCheck,
+          processingTime: Date.now() - startTime,
+          modelVersion: this.tensorFlowService.getModelInfo().modelVersion,
+          preprocessingApplied: ['color-analysis'],
+        };
+      }
+
       const { predictions, processingTime } = await this.tensorFlowService.classifyImage(imageUri);
       
       if (!predictions || predictions.length === 0) {
@@ -54,21 +94,80 @@ export class LeafClassifier {
       const best = predictions[0];
       Logger.info(LogCategory.CLASSIFICATION, `Top prediction: ${best.label} (${(best.confidence * 100).toFixed(1)}%)`);
 
+      // Calculate entropy of probability distribution
+      // Higher entropy (> 0.9) means model is confused/uncertain
+      const entropy = -predictions.reduce((sum, p) => {
+        const prob = p.confidence;
+        return sum + (prob > 0 ? prob * Math.log(prob) : 0);
+      }, 0) / Math.log(predictions.length);
+      
+      const isConfused = entropy > 0.9;
+      Logger.debug(LogCategory.CLASSIFICATION, `Entropy: ${entropy.toFixed(3)}, Is confused: ${isConfused}`);
+
+      // Calculate confidence gap between top 2 predictions
+      const confidenceGap = predictions.length > 1 
+        ? predictions[0].confidence - predictions[1].confidence 
+        : 1.0;
+      const hasLowGap = confidenceGap < 0.15;
+      
+      if (hasLowGap) {
+        Logger.debug(LogCategory.CLASSIFICATION, `Low confidence gap: ${confidenceGap.toFixed(3)} (top 2 predictions too similar)`);
+      }
+
       const primaryResult = {
         label: best.label,
         confidence: best.confidence,
         isLeaf: /leaf|plant/i.test(best.label),
       };
 
-      const needsFallback = primaryResult.confidence < this.confidenceThreshold || !primaryResult.isLeaf;
-      
+      // Determine if we need fallback: low confidence, not a leaf, high entropy, or low confidence gap
+      const needsFallback = primaryResult.confidence < this.confidenceThreshold || 
+                           !primaryResult.isLeaf || 
+                           isConfused || 
+                           hasLowGap;
+
       if (needsFallback) {
-        Logger.warn(LogCategory.CLASSIFICATION, `Confidence below threshold (${this.confidenceThreshold}), using fallback`);
+        let reason = '';
+        if (isConfused) {
+          reason = `Model uncertain (entropy: ${entropy.toFixed(3)})`;
+        } else if (hasLowGap) {
+          reason = `Predictions too similar (gap: ${(confidenceGap * 100).toFixed(1)}%)`;
+        } else if (primaryResult.confidence < this.confidenceThreshold) {
+          reason = `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%`;
+        } else {
+          reason = 'Not identified as a leaf';
+        }
+        
+        Logger.warn(LogCategory.CLASSIFICATION, `Using fallback: ${reason}`);
       }
 
-      const fallbackResult = needsFallback
-        ? { label: 'Low confidence result', confidence: 0.6, reason: `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%` }
-        : undefined;
+      // Create fallback result with appropriate message
+      let fallbackResult;
+      if (needsFallback) {
+        let fallbackLabel = 'Not a Leaf - Low Confidence';
+        if (isConfused) {
+          fallbackLabel = 'Not a Leaf - Model Uncertain';
+        } else if (hasLowGap) {
+          fallbackLabel = 'Not a Leaf - Uncertain Classification';
+        } else if (primaryResult.confidence < this.confidenceThreshold) {
+          fallbackLabel = 'Not a Leaf - Low Confidence';
+        }
+
+        fallbackResult = {
+          label: fallbackLabel,
+          confidence: 0.0,
+          reason: isConfused 
+            ? `Model uncertain (entropy: ${entropy.toFixed(3)})`
+            : hasLowGap
+            ? `Predictions too similar (gap: ${(confidenceGap * 100).toFixed(1)}%)`
+            : primaryResult.confidence < this.confidenceThreshold
+            ? `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%`
+            : 'Not identified as a leaf',
+        };
+        
+        // Set isLeaf to false for rejected results
+        primaryResult.isLeaf = false;
+      }
 
       const qualityAnalysis = {
         isHealthy: /good|healthy/i.test(primaryResult.label),

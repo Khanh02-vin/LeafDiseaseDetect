@@ -7,6 +7,7 @@ import { Colors } from '../constants/colors';
 import { LeafDetectorScreen } from '../screens/LeafDetectorScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { DebugScreen } from '../screens/DebugScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -76,6 +77,22 @@ const TabNavigator = () => {
           title: 'Settings',
         }}
       />
+      {__DEV__ && (
+        <Tab.Screen
+          name="Debug"
+          component={DebugScreen}
+          options={{
+            title: 'Debug',
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons 
+                name={focused ? 'bug' : 'bug-outline'} 
+                size={size} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 };
