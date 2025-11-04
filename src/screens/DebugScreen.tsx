@@ -43,13 +43,22 @@ export const DebugScreen: React.FC = () => {
       if (!result.canceled && result.assets[0]) {
         setIsLoading(true);
 
-        // Get raw ML output for debugging
-        const debugData = await tfService.debugClassification(result.assets[0].uri);
-        setDebugResult(debugData);
-
-        // Get validated result with all checks
+        // Get validated result with all checks first
         const validated = await leafClassifier.classifyLeaf(result.assets[0].uri);
         setValidatedResult(validated);
+
+        // Only get raw ML output if image passed pre-validation (to avoid running model twice)
+        // Check if image was rejected at pre-validation stage
+        const wasRejectedAtPreValidation = validated.primaryResult.label === 'Not a Leaf' 
+          && validated.primaryResult.confidence === 0.0;
+        
+        if (!wasRejectedAtPreValidation) {
+          const debugData = await tfService.debugClassification(result.assets[0].uri);
+          setDebugResult(debugData);
+        } else {
+          // Clear previous debug results if pre-validation failed
+          setDebugResult(null);
+        }
 
         setIsLoading(false);
       }
@@ -69,13 +78,22 @@ export const DebugScreen: React.FC = () => {
       if (!result.canceled && result.assets[0]) {
         setIsLoading(true);
 
-        // Get raw ML output for debugging
-        const debugData = await tfService.debugClassification(result.assets[0].uri);
-        setDebugResult(debugData);
-
-        // Get validated result with all checks
+        // Get validated result with all checks first
         const validated = await leafClassifier.classifyLeaf(result.assets[0].uri);
         setValidatedResult(validated);
+
+        // Only get raw ML output if image passed pre-validation (to avoid running model twice)
+        // Check if image was rejected at pre-validation stage
+        const wasRejectedAtPreValidation = validated.primaryResult.label === 'Not a Leaf' 
+          && validated.primaryResult.confidence === 0.0;
+        
+        if (!wasRejectedAtPreValidation) {
+          const debugData = await tfService.debugClassification(result.assets[0].uri);
+          setDebugResult(debugData);
+        } else {
+          // Clear previous debug results if pre-validation failed
+          setDebugResult(null);
+        }
 
         setIsLoading(false);
       }

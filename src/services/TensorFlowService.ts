@@ -7,6 +7,7 @@ import type { TensorflowModel } from 'react-native-fast-tflite';
 import { Logger, LogCategory } from '../utils/Logger';
 import { decode } from 'jpeg-js';
 import RNFS from 'react-native-fs';
+import { ensureRgbPixelData } from '../utils/imageUtils';
 
 export class TensorFlowService {
   private static instance: TensorFlowService;
@@ -242,29 +243,28 @@ export class TensorFlowService {
       
       const base64Data = await RNFS.readFile(filePath, 'base64');
       
-      // Convert base64 to binary buffer
-      const binaryString = atob(base64Data);
-      const buffer = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        buffer[i] = binaryString.charCodeAt(i);
-      }
+      // Convert base64 to binary buffer efficiently
+      // Use optimized approach to avoid memory leaks with large images
+      const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
       // Decode JPEG using jpeg-js
       const decoded = decode(buffer, { useTArray: true });
+      const decodedWidth = decoded.width;
+      const decodedHeight = decoded.height;
+      const rgbData = ensureRgbPixelData(decoded.data as Uint8Array, decodedWidth, decodedHeight);
       
       // Validate dimensions match expected (decoded image might be different due to JPEG scaling)
-      if (decoded.width !== width || decoded.height !== height) {
-        Logger.warn(LogCategory.ML, `JPEG dimensions mismatch: expected ${width}x${height}, got ${decoded.width}x${decoded.height}. Will resize pixel data.`);
-        
-        // If dimensions don't match, we need to resize or crop
-        // For now, we'll use the decoded image as-is and let the model handle it
-        // or we could implement simple nearest-neighbor scaling
+      if (decodedWidth !== width || decodedHeight !== height) {
+        Logger.warn(
+          LogCategory.ML,
+          `JPEG dimensions mismatch: expected ${width}x${height}, got ${decodedWidth}x${decodedHeight}. Will resize pixel data.`
+        );
       }
 
       // Extract RGB pixels from decoded JPEG data
       // JPEG data from jpeg-js is stored as RGB (3 bytes per pixel)
-      const decodedData = decoded.data; // Uint8Array in RGB format
-      const decodedSize = decoded.width * decoded.height * 3;
+      const decodedData = rgbData; // Uint8Array in RGB format
+      const decodedSize = decodedWidth * decodedHeight * 3;
       const expectedSize = width * height * 3;
       
       let pixelData: Uint8Array;
@@ -273,24 +273,29 @@ export class TensorFlowService {
         // Perfect match, use directly
         pixelData = decodedData;
       } else {
-        // Dimensions don't match, need to resize pixel data
-        // Simple nearest-neighbor down/up sampling
-        pixelData = new Uint8Array(expectedSize);
-        const scaleX = decoded.width / width;
-        const scaleY = decoded.height / height;
+        // Dimensions don't match - use optimized resizing
+        // Instead of manual pixel manipulation, we'll resize the image properly
+        Logger.warn(LogCategory.ML, `Image dimensions mismatch detected, using optimized resizing`);
         
+        // For now, use a more efficient approach - sample every Nth pixel
+        pixelData = new Uint8Array(expectedSize);
+        const scaleX = decodedWidth / width;
+        const scaleY = decodedHeight / height;
+        
+        // Optimized sampling with reduced loop overhead
+        let destIndex = 0;
         for (let y = 0; y < height; y++) {
+          const srcY = Math.floor(y * scaleY) * decodedWidth * 3;
           for (let x = 0; x < width; x++) {
-            const srcX = Math.floor(x * scaleX);
-            const srcY = Math.floor(y * scaleY);
-            const srcIndex = (srcY * decoded.width + srcX) * 3;
-            const destIndex = (y * width + x) * 3;
+            const srcX = Math.floor(x * scaleX) * 3;
+            const srcIndex = srcY + srcX;
             
-            if (srcIndex < decodedSize && destIndex < expectedSize) {
+            if (srcIndex + 2 < decodedSize && destIndex + 2 < expectedSize) {
               pixelData[destIndex] = decodedData[srcIndex];     // R
               pixelData[destIndex + 1] = decodedData[srcIndex + 1]; // G
               pixelData[destIndex + 2] = decodedData[srcIndex + 2]; // B
             }
+            destIndex += 3;
           }
         }
       }

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { Colors } from './src/constants/colors';
 import { Logger, LogCategory, LogLevel } from './src/utils/Logger';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 export default function App() {
   useEffect(() => {
@@ -27,9 +28,16 @@ export default function App() {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        Logger.error(LogCategory.APP, 'App-level error caught', { 
+          error: error.message, 
+          stack: error.stack 
+        });
+      }}
+    >
       <AppNavigator />
       <StatusBar style="auto" backgroundColor={Colors.background} />
-    </>
+    </ErrorBoundary>
   );
 }

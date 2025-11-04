@@ -15,6 +15,8 @@ import { LeafClassifier } from '../services/LeafClassifier';
 import { Button } from '../components/Button';
 import { QualityBadge } from '../components/QualityBadge';
 import { Colors } from '../constants/colors';
+import { Logger, LogCategory } from '../utils/Logger';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +25,8 @@ export const LeafDetectorScreen: React.FC = () => {
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   
   const { 
     setCurrentScan, 
@@ -40,12 +44,12 @@ export const LeafDetectorScreen: React.FC = () => {
   }, [requestPermission]);
 
   const takePicture = useCallback(async () => {
-    if (!cameraRef) return;
+    if (!cameraRef || !isModelReady) return;
 
     try {
       setLoading(true);
       const photo = await cameraRef.takePictureAsync({
-        quality: 0.8,
+        quality: 1.0,
         base64: false,
       });
       setCapturedImage(photo.uri);
@@ -55,7 +59,7 @@ export const LeafDetectorScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [cameraRef, setLoading, setError]);
+  }, [cameraRef, setLoading, setError, isModelReady]);
 
   const pickImage = useCallback(async () => {
     try {
@@ -63,7 +67,7 @@ export const LeafDetectorScreen: React.FC = () => {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 1.0,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -76,7 +80,7 @@ export const LeafDetectorScreen: React.FC = () => {
   }, [setError]);
 
   const analyzeImage = useCallback(async () => {
-    if (!capturedImage) return;
+    if (!capturedImage || !isModelReady) return;
 
     try {
       setIsProcessing(true);
@@ -97,7 +101,7 @@ export const LeafDetectorScreen: React.FC = () => {
       setIsProcessing(false);
       setLoading(false);
     }
-  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading]);
+  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading, isModelReady]);
 
   const resetCamera = useCallback(() => {
     setCapturedImage(null);
@@ -105,7 +109,21 @@ export const LeafDetectorScreen: React.FC = () => {
   }, [setCurrentScan]);
 
   React.useEffect(() => {
-    leafClassifier.initialize();
+    const initializeModel = async () => {
+      try {
+        setInitError(null);
+        Logger.info(LogCategory.INIT, 'Initializing AI model...');
+        await leafClassifier.initialize();
+        setIsModelReady(true);
+        Logger.success(LogCategory.INIT, 'AI model initialized successfully');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to initialize AI model';
+        setInitError(errorMessage);
+        Logger.error(LogCategory.INIT, 'AI model initialization failed', error);
+      }
+    };
+    
+    initializeModel();
   }, [leafClassifier]);
 
   if (!permission) {
@@ -125,8 +143,37 @@ export const LeafDetectorScreen: React.FC = () => {
     );
   }
 
+  // Show loading state while model is initializing
+  if (!isModelReady) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Initializing AI model...</Text>
+          {initError && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{initError}</Text>
+              <Button 
+                title="Retry" 
+                onPress={() => window.location.reload()} 
+                variant="outline"
+              />
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        Logger.error(LogCategory.APP, 'LeafDetectorScreen error caught', { 
+          error: error.message, 
+          stack: error.stack 
+        });
+      }}
+    >
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Leaf Disease Detector</Text>
       <Text style={styles.subtitle}>Capture or select a leaf image to analyze</Text>
 
@@ -254,6 +301,7 @@ export const LeafDetectorScreen: React.FC = () => {
         </Text>
       </View>
     </ScrollView>
+    </ErrorBoundary>
   );
 };
 
@@ -479,5 +527,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.warning,
     fontStyle: 'italic',
+  },
+  
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  
+  loadingText: {
+    fontSize: 18,
+    color: Colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  
+  errorContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  
+  errorText: {
+    fontSize: 14,
+    color: Colors.error || '#FF5252',
+    textAlign: 'center',
+    marginBottom: 12,
   },
 });

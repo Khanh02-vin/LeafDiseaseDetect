@@ -9,7 +9,8 @@ export class LeafClassifier {
   private static instance: LeafClassifier;
   private tensorFlowService: TensorFlowService;
   private imageQualityChecker: ImageQualityChecker;
-  private confidenceThreshold = 0.75;
+  private baseConfidenceThreshold = 0.7; // Increased from 0.6 for stricter classification
+  private minConfidenceRatio = 2.0; // Top prediction must be 2x higher than second prediction
 
   private constructor() {
     this.tensorFlowService = TensorFlowService.getInstance();
@@ -21,6 +22,36 @@ export class LeafClassifier {
       LeafClassifier.instance = new LeafClassifier();
     }
     return LeafClassifier.instance;
+  }
+
+  /**
+   * Calculates adaptive confidence threshold based on image quality
+   * @param imageQuality Result from image quality analysis
+   * @returns Adaptive confidence threshold (0.55 - 0.85) - increased from (0.4 - 0.8)
+   */
+  private calculateAdaptiveThreshold(imageQuality: any): number {
+    let threshold = this.baseConfidenceThreshold;
+    
+    // Adjust based on image quality
+    if (!imageQuality.isHighQuality) {
+      threshold -= 0.1; // Lower threshold for poor quality images
+    }
+    
+    // Adjust based on specific quality issues
+    if (imageQuality.issues) {
+      if (imageQuality.issues.some((issue: string) => issue.includes('dark'))) {
+        threshold -= 0.05; // Lower threshold for dark images
+      }
+      if (imageQuality.issues.some((issue: string) => issue.includes('blurry'))) {
+        threshold -= 0.05; // Lower threshold for blurry images
+      }
+      if (imageQuality.issues.some((issue: string) => issue.includes('small'))) {
+        threshold -= 0.1; // Lower threshold for small images
+      }
+    }
+    
+    // Ensure threshold stays within reasonable bounds (increased minimum from 0.4 to 0.55)
+    return Math.max(0.55, Math.min(0.85, threshold));
   }
 
   public async initialize(): Promise<void> {
@@ -45,6 +76,10 @@ export class LeafClassifier {
       Logger.time('Leaf Classification Pipeline');
 
       const qualityCheck = await this.imageQualityChecker.checkImageQuality(imageUri);
+      
+      // Calculate adaptive confidence threshold based on image quality
+      const adaptiveThreshold = this.calculateAdaptiveThreshold(qualityCheck);
+      Logger.debug(LogCategory.CLASSIFICATION, `Using adaptive confidence threshold: ${adaptiveThreshold.toFixed(2)}`);
 
       // Pre-validation: Color-based leaf detection (skip expensive ML inference if not a leaf)
       const isLikelyLeaf = await LeafDetector.isLikelyLeaf(imageUri);
@@ -110,8 +145,18 @@ export class LeafClassifier {
         : 1.0;
       const hasLowGap = confidenceGap < 0.15;
       
+      // Calculate confidence ratio (top / second) - stronger check than gap
+      const confidenceRatio = predictions.length > 1 && predictions[1].confidence > 0
+        ? predictions[0].confidence / predictions[1].confidence
+        : 10.0; // If no second prediction, assume very confident
+      const hasLowRatio = confidenceRatio < this.minConfidenceRatio;
+      
       if (hasLowGap) {
         Logger.debug(LogCategory.CLASSIFICATION, `Low confidence gap: ${confidenceGap.toFixed(3)} (top 2 predictions too similar)`);
+      }
+      
+      if (hasLowRatio) {
+        Logger.debug(LogCategory.CLASSIFICATION, `Low confidence ratio: ${confidenceRatio.toFixed(2)} (top/second < ${this.minConfidenceRatio})`);
       }
 
       const primaryResult = {
@@ -120,20 +165,23 @@ export class LeafClassifier {
         isLeaf: /leaf|plant/i.test(best.label),
       };
 
-      // Determine if we need fallback: low confidence, not a leaf, high entropy, or low confidence gap
-      const needsFallback = primaryResult.confidence < this.confidenceThreshold || 
+      // Determine if we need fallback: low confidence, not a leaf, high entropy, low gap, or low ratio
+      const needsFallback = primaryResult.confidence < adaptiveThreshold || 
                            !primaryResult.isLeaf || 
                            isConfused || 
-                           hasLowGap;
+                           hasLowGap ||
+                           hasLowRatio;
 
       if (needsFallback) {
         let reason = '';
         if (isConfused) {
           reason = `Model uncertain (entropy: ${entropy.toFixed(3)})`;
+        } else if (hasLowRatio) {
+          reason = `Confidence ratio too low (${confidenceRatio.toFixed(2)} < ${this.minConfidenceRatio})`;
         } else if (hasLowGap) {
           reason = `Predictions too similar (gap: ${(confidenceGap * 100).toFixed(1)}%)`;
-        } else if (primaryResult.confidence < this.confidenceThreshold) {
-          reason = `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%`;
+        } else if (primaryResult.confidence < adaptiveThreshold) {
+          reason = `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(adaptiveThreshold * 100)}%`;
         } else {
           reason = 'Not identified as a leaf';
         }
@@ -147,9 +195,11 @@ export class LeafClassifier {
         let fallbackLabel = 'Not a Leaf - Low Confidence';
         if (isConfused) {
           fallbackLabel = 'Not a Leaf - Model Uncertain';
+        } else if (hasLowRatio) {
+          fallbackLabel = 'Not a Leaf - Low Confidence Ratio';
         } else if (hasLowGap) {
           fallbackLabel = 'Not a Leaf - Uncertain Classification';
-        } else if (primaryResult.confidence < this.confidenceThreshold) {
+        } else if (primaryResult.confidence < adaptiveThreshold) {
           fallbackLabel = 'Not a Leaf - Low Confidence';
         }
 
@@ -158,10 +208,12 @@ export class LeafClassifier {
           confidence: 0.0,
           reason: isConfused 
             ? `Model uncertain (entropy: ${entropy.toFixed(3)})`
+            : hasLowRatio
+            ? `Confidence ratio too low (${confidenceRatio.toFixed(2)} < ${this.minConfidenceRatio})`
             : hasLowGap
             ? `Predictions too similar (gap: ${(confidenceGap * 100).toFixed(1)}%)`
-            : primaryResult.confidence < this.confidenceThreshold
-            ? `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(this.confidenceThreshold * 100)}%`
+            : primaryResult.confidence < adaptiveThreshold
+            ? `Confidence ${(primaryResult.confidence * 100).toFixed(1)}% < ${(adaptiveThreshold * 100)}%`
             : 'Not identified as a leaf',
         };
         
@@ -244,12 +296,12 @@ export class LeafClassifier {
   }
 
   public setConfidenceThreshold(threshold: number): void {
-    const oldThreshold = this.confidenceThreshold;
-    this.confidenceThreshold = Math.max(0, Math.min(1, threshold));
-    Logger.info(LogCategory.CLASSIFICATION, `Confidence threshold updated: ${oldThreshold} -> ${this.confidenceThreshold}`);
+    const oldThreshold = this.baseConfidenceThreshold;
+    this.baseConfidenceThreshold = Math.max(0.4, Math.min(0.8, threshold));
+    Logger.info(LogCategory.CLASSIFICATION, `Base confidence threshold updated: ${oldThreshold} -> ${this.baseConfidenceThreshold}`);
   }
 
   public getConfidenceThreshold(): number {
-    return this.confidenceThreshold;
+    return this.baseConfidenceThreshold;
   }
 }

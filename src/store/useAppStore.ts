@@ -26,6 +26,7 @@ interface AppState {
     notifications: boolean;
     modelVersion: string;
     confidenceThreshold: number;
+    adaptiveThreshold: boolean;
   };
   updateSettings: (updates: Partial<AppState['settings']>) => void;
   
@@ -93,7 +94,8 @@ export const useAppStore = create<AppState>()(
         locationTracking: true,
         notifications: true,
         modelVersion: '1.0.0',
-        confidenceThreshold: 0.3,
+        confidenceThreshold: 0.6,
+        adaptiveThreshold: true,
       },
       updateSettings: (updates) => {
         set((state) => ({

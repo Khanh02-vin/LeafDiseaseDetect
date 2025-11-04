@@ -1,6 +1,10 @@
 import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Logger, LogCategory } from './Logger';
+import { decode } from 'jpeg-js';
+import RNFS from 'react-native-fs';
+import { ensureRgbPixelData } from './imageUtils';
 
 export interface ImageQualityResult {
   isHighQuality: boolean;
@@ -94,28 +98,149 @@ export class ImageQualityChecker {
   }
 
   private async calculateBrightness(imageUri: string): Promise<number> {
-    // Simplified brightness calculation
-    // In a real implementation, you would analyze the actual image data
     try {
-      // This is a placeholder - you would need to implement actual brightness calculation
-      // using image processing libraries or native modules
-      return 0.7; // Placeholder value
+      Logger.debug(LogCategory.IMAGE, 'Calculating real brightness...');
+      
+      // Resize image to small size for performance
+      const manipulatedImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 64, height: 64 } }],
+        { compress: 1.0, format: ImageManipulator.SaveFormat.JPEG, base64: false }
+      );
+
+      // Extract pixel data
+      const { data: pixelData, width, height } = await this.extractPixelData(manipulatedImage.uri);
+      
+      // Calculate mean brightness (V channel in HSV, or simple average of RGB)
+      let totalBrightness = 0;
+      const totalPixels = width * height;
+      
+      for (let i = 0; i < totalPixels; i++) {
+        const pixelIndex = i * 3;
+        if (pixelIndex + 2 >= pixelData.length) break;
+        
+        const r = pixelData[pixelIndex] / 255.0;
+        const g = pixelData[pixelIndex + 1] / 255.0;
+        const b = pixelData[pixelIndex + 2] / 255.0;
+        
+        // Use max(R,G,B) as brightness (V in HSV)
+        const brightness = Math.max(r, g, b);
+        totalBrightness += brightness;
+      }
+      
+      const averageBrightness = totalBrightness / totalPixels;
+      Logger.debug(LogCategory.IMAGE, `Average brightness: ${averageBrightness.toFixed(3)}`);
+      
+      return averageBrightness;
     } catch (error) {
-      console.error('Brightness calculation failed:', error);
-      return 0.5; // Default value
+      Logger.error(LogCategory.IMAGE, 'Brightness calculation failed', error);
+      return 0.5; // Default value on error
     }
   }
 
   private async calculateBlur(imageUri: string): Promise<number> {
-    // Simplified blur calculation
-    // In a real implementation, you would use edge detection or frequency analysis
     try {
-      // This is a placeholder - you would need to implement actual blur detection
-      // using image processing libraries or native modules
-      return 0.2; // Placeholder value
+      Logger.debug(LogCategory.IMAGE, 'Calculating blur using Laplacian variance...');
+      
+      // Resize to small size for performance
+      const manipulatedImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 128, height: 128 } }],
+        { compress: 1.0, format: ImageManipulator.SaveFormat.JPEG, base64: false }
+      );
+
+      const { data: pixelData, width, height } = await this.extractPixelData(manipulatedImage.uri);
+      
+      // Convert to grayscale first
+      const grayscale = new Float32Array(width * height);
+      for (let i = 0; i < width * height; i++) {
+        const pixelIndex = i * 3;
+        if (pixelIndex + 2 >= pixelData.length) break;
+        
+        const r = pixelData[pixelIndex] / 255.0;
+        const g = pixelData[pixelIndex + 1] / 255.0;
+        const b = pixelData[pixelIndex + 2] / 255.0;
+        
+        // Standard grayscale conversion
+        grayscale[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+      }
+      
+      // Apply Laplacian kernel and calculate variance
+      // Laplacian kernel: [0 1 0; 1 -4 1; 0 1 0]
+      let laplacianSum = 0;
+      let laplacianSquaredSum = 0;
+      let count = 0;
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          const laplacian = 
+            grayscale[idx - width] +      // top
+            grayscale[idx + width] +      // bottom
+            grayscale[idx - 1] +          // left
+            grayscale[idx + 1] -          // right
+            4 * grayscale[idx];           // center
+          
+          laplacianSum += laplacian;
+          laplacianSquaredSum += laplacian * laplacian;
+          count++;
+        }
+      }
+      
+      // Calculate variance
+      const mean = laplacianSum / count;
+      const variance = (laplacianSquaredSum / count) - (mean * mean);
+      
+      // Normalize to 0-1 range (higher variance = sharper image)
+      // Typical variance for sharp images: > 0.01, blurry: < 0.005
+      const blurScore = 1.0 - Math.min(variance / 0.02, 1.0); // Invert so higher = more blurry
+      
+      Logger.debug(LogCategory.IMAGE, `Laplacian variance: ${variance.toFixed(6)}, Blur score: ${blurScore.toFixed(3)}`);
+      
+      return blurScore;
     } catch (error) {
-      console.error('Blur calculation failed:', error);
-      return 0.1; // Default value
+      Logger.error(LogCategory.IMAGE, 'Blur calculation failed', error);
+      return 0.1; // Default value (assume not blurry on error)
+    }
+  }
+
+  /**
+   * Extracts RGB pixel data from a JPEG image
+   */
+  private async extractPixelData(
+    imageUri: string
+  ): Promise<{ data: Uint8Array; width: number; height: number }> {
+    try {
+      let filePath = imageUri;
+      if (imageUri.startsWith('file://')) {
+        filePath = imageUri.replace('file://', '');
+      } else if (imageUri.startsWith('content://') || imageUri.startsWith('ph://')) {
+        const tempPath = `${RNFS.CachesDirectoryPath}/temp_quality_check_${Date.now()}.jpg`;
+        try {
+          const base64 = await RNFS.readFile(imageUri, 'base64');
+          await RNFS.writeFile(tempPath, base64, 'base64');
+          filePath = tempPath;
+        } catch (err) {
+          throw new Error(`Failed to read image file: ${err}`);
+        }
+      }
+
+      const base64Data = await RNFS.readFile(filePath, 'base64');
+      const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+      const decoded = decode(buffer, { useTArray: true });
+      const decodedWidth = decoded.width;
+      const decodedHeight = decoded.height;
+      const rgbData = ensureRgbPixelData(decoded.data as Uint8Array, decodedWidth, decodedHeight);
+      
+      return {
+        data: rgbData,
+        width: decodedWidth,
+        height: decodedHeight,
+      };
+    } catch (error) {
+      Logger.error(LogCategory.IMAGE, 'Failed to extract pixel data for quality check', error);
+      throw error;
     }
   }
 

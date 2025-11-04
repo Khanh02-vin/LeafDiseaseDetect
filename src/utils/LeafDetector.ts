@@ -2,6 +2,7 @@ import { decode } from 'jpeg-js';
 import * as ImageManipulator from 'expo-image-manipulator';
 import RNFS from 'react-native-fs';
 import { Logger, LogCategory } from './Logger';
+import { ensureRgbPixelData } from './imageUtils';
 
 /**
  * LeafDetector - Color-based leaf detection utility
@@ -10,7 +11,11 @@ import { Logger, LogCategory } from './Logger';
 export class LeafDetector {
   private static readonly GREEN_HUE_MIN = 90; // 90 degrees in HSV (green start)
   private static readonly GREEN_HUE_MAX = 150; // 150 degrees in HSV (green end)
-  private static readonly MIN_GREEN_PERCENTAGE = 0.30; // 30% of pixels must be green
+  private static readonly MIN_GREEN_PERCENTAGE = 0.22; // 22% of pixels must be green (aggressive lowering for real-world camera photos with backgrounds/shadows)
+  private static readonly MIN_SATURATION = 0.18; // Minimum saturation (lowered to 0.18 to accept natural leaf colors with lighting variations)
+  private static readonly MAX_SATURATION = 0.95; // Maximum saturation (filters out artificial colors)
+  private static readonly MIN_VALUE = 0.15; // Minimum brightness (filters out very dark images)
+  private static readonly MAX_VALUE = 0.95; // Maximum brightness (filters out overexposed images)
   private static readonly SAMPLE_SIZE = 224; // Downsample to this size for performance
 
   /**
@@ -33,11 +38,13 @@ export class LeafDetector {
       Logger.debug(LogCategory.IMAGE, `Image resized to ${this.SAMPLE_SIZE}x${this.SAMPLE_SIZE} for color analysis`);
 
       // Extract pixel data
-      const pixelData = await this.extractPixelData(resizedUri, this.SAMPLE_SIZE, this.SAMPLE_SIZE);
+      const { data: pixelData, width: decodedWidth, height: decodedHeight } = await this.extractPixelData(
+        resizedUri
+      );
       
       // Count green pixels
-      const greenPixelCount = this.countGreenPixels(pixelData, this.SAMPLE_SIZE, this.SAMPLE_SIZE);
-      const totalPixels = this.SAMPLE_SIZE * this.SAMPLE_SIZE;
+      const greenPixelCount = this.countGreenPixels(pixelData, decodedWidth, decodedHeight);
+      const totalPixels = decodedWidth * decodedHeight;
       const greenPercentage = greenPixelCount / totalPixels;
 
       Logger.debug(LogCategory.IMAGE, `Green pixels: ${greenPixelCount}/${totalPixels} (${(greenPercentage * 100).toFixed(1)}%)`);
@@ -61,7 +68,9 @@ export class LeafDetector {
   /**
    * Extracts RGB pixel data from a JPEG image
    */
-  private static async extractPixelData(imageUri: string, width: number, height: number): Promise<Uint8Array> {
+  private static async extractPixelData(
+    imageUri: string
+  ): Promise<{ data: Uint8Array; width: number; height: number }> {
     try {
       // Handle different URI formats
       let filePath = imageUri;
@@ -91,9 +100,16 @@ export class LeafDetector {
 
       // Decode JPEG
       const decoded = decode(buffer, { useTArray: true });
+      const decodedWidth = decoded.width;
+      const decodedHeight = decoded.height;
+      const rgbData = ensureRgbPixelData(decoded.data as Uint8Array, decodedWidth, decodedHeight);
       
       // Extract RGB pixels
-      return decoded.data; // Uint8Array in RGB format (3 bytes per pixel)
+      return {
+        data: rgbData,
+        width: decodedWidth,
+        height: decodedHeight,
+      };
     } catch (error) {
       Logger.error(LogCategory.IMAGE, 'Failed to extract pixel data for color analysis', error);
       throw error;
@@ -102,14 +118,20 @@ export class LeafDetector {
 
   /**
    * Counts pixels with green hue (90-150 degrees in HSV)
+   * Now also checks saturation and value to filter out non-leaf greens
    * @param pixelData RGB pixel data (Uint8Array, 3 bytes per pixel)
    * @param width Image width
    * @param height Image height
-   * @returns Number of green pixels
+   * @returns Number of green pixels that meet all criteria
    */
   private static countGreenPixels(pixelData: Uint8Array, width: number, height: number): number {
     let greenCount = 0;
     const totalPixels = width * height;
+    
+    let greenHueCount = 0;
+    let saturationFailCount = 0;
+    let valueFailCount = 0;
+    let totalGrayscale = 0;
 
     for (let i = 0; i < totalPixels; i++) {
       const pixelIndex = i * 3;
@@ -120,18 +142,37 @@ export class LeafDetector {
       const g = pixelData[pixelIndex + 1] / 255.0;
       const b = pixelData[pixelIndex + 2] / 255.0;
 
-      // Convert RGB to HSV
       const hsv = this.rgbToHsv(r, g, b);
       
-      // Check if hue is in green range (90-150 degrees)
-      // HSV hue is in range 0-360, but we need to handle wrap-around
+      if (hsv.s < 0.05) totalGrayscale++;
+      
       let hue = hsv.h;
       if (hue < 0) hue += 360;
 
       if (hue >= this.GREEN_HUE_MIN && hue <= this.GREEN_HUE_MAX) {
+        greenHueCount++;
+        
+        if (hsv.s < this.MIN_SATURATION || hsv.s > this.MAX_SATURATION) {
+          saturationFailCount++;
+          continue;
+        }
+        
+        if (hsv.v < this.MIN_VALUE || hsv.v > this.MAX_VALUE) {
+          valueFailCount++;
+          continue;
+        }
+        
         greenCount++;
       }
     }
+
+    Logger.debug(LogCategory.IMAGE, `Color Analysis Details:
+      - Total pixels: ${totalPixels}
+      - Green hue range (90-150°): ${greenHueCount} pixels (${(greenHueCount/totalPixels*100).toFixed(1)}%)
+      - Failed saturation check: ${saturationFailCount} pixels
+      - Failed brightness check: ${valueFailCount} pixels
+      - Grayscale/desaturated (<5% sat): ${totalGrayscale} pixels (${(totalGrayscale/totalPixels*100).toFixed(1)}%)
+      - Final green count: ${greenCount} pixels (${(greenCount/totalPixels*100).toFixed(1)}%)`);
 
     return greenCount;
   }
@@ -167,8 +208,6 @@ export class LeafDetector {
     return { h, s, v };
   }
 }
-
-
 
 
 
