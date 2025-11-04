@@ -62,12 +62,16 @@ export class LeafClassifier {
 
   public async classifyLeaf(
     imageUri: string,
-    location?: { latitude: number; longitude: number; address?: string }
+    location?: { latitude: number; longitude: number; address?: string },
+    metadata?: { source?: 'camera' | 'gallery' }
   ): Promise<ClassificationResult> {
     const startTime = Date.now();
     const id = uuid.v4() as string;
 
     Logger.info(LogCategory.CLASSIFICATION, `Starting leaf classification - ID: ${id}`);
+    if (metadata?.source) {
+      Logger.debug(LogCategory.CLASSIFICATION, `Image source: ${metadata.source}`);
+    }
     if (location) {
       Logger.debug(LogCategory.CLASSIFICATION, `Location provided: ${location.latitude}, ${location.longitude}`);
     }
@@ -82,13 +86,17 @@ export class LeafClassifier {
       Logger.debug(LogCategory.CLASSIFICATION, `Using adaptive confidence threshold: ${adaptiveThreshold.toFixed(2)}`);
 
       // Pre-validation: Color-based leaf detection (skip expensive ML inference if not a leaf)
-      const isLikelyLeaf = await LeafDetector.isLikelyLeaf(imageUri);
+      // SKIP pre-validation for camera images - they often fail due to white backgrounds
+      const skipPreValidation = metadata?.source === 'camera';
       
-      if (!isLikelyLeaf) {
-        Logger.warn(LogCategory.CLASSIFICATION, 'Image rejected by color-based detection (insufficient green pixels)');
-        Logger.timeEnd('Leaf Classification Pipeline');
+      if (!skipPreValidation) {
+        const isLikelyLeaf = await LeafDetector.isLikelyLeaf(imageUri);
         
-        return {
+        if (!isLikelyLeaf) {
+          Logger.warn(LogCategory.CLASSIFICATION, 'Image rejected by color-based detection (insufficient green pixels)');
+          Logger.timeEnd('Leaf Classification Pipeline');
+          
+          return {
           id,
           imageUri,
           timestamp: new Date(),
@@ -118,6 +126,9 @@ export class LeafClassifier {
           modelVersion: this.tensorFlowService.getModelInfo().modelVersion,
           preprocessingApplied: ['color-analysis'],
         };
+        }
+      } else {
+        Logger.info(LogCategory.CLASSIFICATION, 'Skipping pre-validation for camera image - going straight to ML model');
       }
 
       const { predictions, processingTime } = await this.tensorFlowService.classifyImage(imageUri);

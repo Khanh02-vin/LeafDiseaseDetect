@@ -9,13 +9,13 @@ import { ensureRgbPixelData } from './imageUtils';
  * Detects if an image is likely to be a leaf by analyzing green hue percentage
  */
 export class LeafDetector {
-  private static readonly GREEN_HUE_MIN = 90; // 90 degrees in HSV (green start)
-  private static readonly GREEN_HUE_MAX = 150; // 150 degrees in HSV (green end)
-  private static readonly MIN_GREEN_PERCENTAGE = 0.22; // 22% of pixels must be green (aggressive lowering for real-world camera photos with backgrounds/shadows)
-  private static readonly MIN_SATURATION = 0.18; // Minimum saturation (lowered to 0.18 to accept natural leaf colors with lighting variations)
-  private static readonly MAX_SATURATION = 0.95; // Maximum saturation (filters out artificial colors)
-  private static readonly MIN_VALUE = 0.15; // Minimum brightness (filters out very dark images)
-  private static readonly MAX_VALUE = 0.95; // Maximum brightness (filters out overexposed images)
+  private static readonly GREEN_HUE_MIN = 85; // 85 degrees in HSV (green start, expanded range)
+  private static readonly GREEN_HUE_MAX = 155; // 155 degrees in HSV (green end, expanded range)
+  private static readonly MIN_GREEN_PERCENTAGE = 0.08; // 8% of pixels must be green (very permissive for camera images)
+  private static readonly MIN_SATURATION = 0.08; // Minimum saturation (very low to accept all natural greens)
+  private static readonly MAX_SATURATION = 0.98; // Maximum saturation (filters out artificial colors)
+  private static readonly MIN_VALUE = 0.10; // Minimum brightness (filters out very dark images)
+  private static readonly MAX_VALUE = 0.98; // Maximum brightness (filters out overexposed images)
   private static readonly SAMPLE_SIZE = 224; // Downsample to this size for performance
 
   /**
@@ -50,6 +50,13 @@ export class LeafDetector {
       Logger.debug(LogCategory.IMAGE, `Green pixels: ${greenPixelCount}/${totalPixels} (${(greenPercentage * 100).toFixed(1)}%)`);
 
       const isLeaf = greenPercentage >= this.MIN_GREEN_PERCENTAGE;
+      
+      // Enhanced logging for debugging camera vs gallery differences
+      Logger.info(LogCategory.IMAGE, 
+        `Green pixel analysis: ${greenPixelCount}/${totalPixels} (${(greenPercentage * 100).toFixed(1)}%) | ` +
+        `Threshold: ${(this.MIN_GREEN_PERCENTAGE * 100).toFixed(0)}% | ` +
+        `Result: ${isLeaf ? 'PASS' : 'FAIL'}`
+      );
       
       if (isLeaf) {
         Logger.success(LogCategory.IMAGE, `Image likely contains a leaf (${(greenPercentage * 100).toFixed(1)}% green)`);

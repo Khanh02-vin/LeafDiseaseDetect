@@ -1,9 +1,15 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { LogBox } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { Colors } from './src/constants/colors';
 import { Logger, LogCategory, LogLevel } from './src/utils/Logger';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+
+// Ignore specific LogBox warnings
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text>',
+]);
 
 export default function App() {
   useEffect(() => {

@@ -24,6 +24,7 @@ export const LeafDetectorScreen: React.FC = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [imageSource, setImageSource] = useState<'camera' | 'gallery'>('camera');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isModelReady, setIsModelReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -53,6 +54,8 @@ export const LeafDetectorScreen: React.FC = () => {
         base64: false,
       });
       setCapturedImage(photo.uri);
+      setImageSource('camera');
+      Logger.debug(LogCategory.IMAGE, `Camera image captured: ${photo.uri}`);
     } catch (error) {
       console.error('Failed to take picture:', error);
       setError('Failed to capture image');
@@ -72,6 +75,8 @@ export const LeafDetectorScreen: React.FC = () => {
 
       if (!result.canceled && result.assets[0]) {
         setCapturedImage(result.assets[0].uri);
+        setImageSource('gallery');
+        Logger.debug(LogCategory.IMAGE, `Gallery image selected: ${result.assets[0].uri}`);
       }
     } catch (error) {
       console.error('Failed to pick image:', error);
@@ -86,7 +91,12 @@ export const LeafDetectorScreen: React.FC = () => {
       setIsProcessing(true);
       setLoading(true);
       
-      const result = await leafClassifier.classifyLeaf(capturedImage);
+      Logger.info(LogCategory.CLASSIFICATION, `Analyzing ${imageSource} image`);
+      const result = await leafClassifier.classifyLeaf(
+        capturedImage,
+        undefined,
+        { source: imageSource }
+      );
       
       setCurrentScan(result);
       addToHistory(result);
@@ -101,30 +111,30 @@ export const LeafDetectorScreen: React.FC = () => {
       setIsProcessing(false);
       setLoading(false);
     }
-  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading, isModelReady]);
+  }, [capturedImage, imageSource, leafClassifier, setCurrentScan, addToHistory, setLoading, isModelReady]);
 
   const resetCamera = useCallback(() => {
     setCapturedImage(null);
     setCurrentScan(null);
   }, [setCurrentScan]);
 
-  React.useEffect(() => {
-    const initializeModel = async () => {
-      try {
-        setInitError(null);
-        Logger.info(LogCategory.INIT, 'Initializing AI model...');
-        await leafClassifier.initialize();
-        setIsModelReady(true);
-        Logger.success(LogCategory.INIT, 'AI model initialized successfully');
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to initialize AI model';
-        setInitError(errorMessage);
-        Logger.error(LogCategory.INIT, 'AI model initialization failed', error);
-      }
-    };
-    
-    initializeModel();
+  const initializeModel = useCallback(async () => {
+    try {
+      setInitError(null);
+      Logger.info(LogCategory.INIT, 'Initializing AI model...');
+      await leafClassifier.initialize();
+      setIsModelReady(true);
+      Logger.success(LogCategory.INIT, 'AI model initialized successfully');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize AI model';
+      setInitError(errorMessage);
+      Logger.error(LogCategory.INIT, 'AI model initialization failed', error);
+    }
   }, [leafClassifier]);
+
+  React.useEffect(() => {
+    initializeModel();
+  }, [initializeModel]);
 
   if (!permission) {
     return (
@@ -154,7 +164,7 @@ export const LeafDetectorScreen: React.FC = () => {
               <Text style={styles.errorText}>{initError}</Text>
               <Button 
                 title="Retry" 
-                onPress={() => window.location.reload()} 
+                onPress={initializeModel} 
                 variant="outline"
               />
             </View>
