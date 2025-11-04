@@ -10,7 +10,7 @@ import { Logger, LogCategory } from './Logger';
 export class LeafDetector {
   private static readonly GREEN_HUE_MIN = 90; // 90 degrees in HSV (green start)
   private static readonly GREEN_HUE_MAX = 150; // 150 degrees in HSV (green end)
-  private static readonly MIN_GREEN_PERCENTAGE = 0.35; // 35% of pixels must be green
+  private static readonly MIN_GREEN_PERCENTAGE = 0.30; // 30% of pixels must be green
   private static readonly SAMPLE_SIZE = 224; // Downsample to this size for performance
 
   /**
@@ -167,4 +167,14 @@ export class LeafDetector {
     return { h, s, v };
   }
 }
+
+
+
+
+
+
+
+
+
+
 
