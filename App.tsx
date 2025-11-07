@@ -6,10 +6,10 @@ import { Colors } from './src/constants/colors';
 import { Logger, LogCategory, LogLevel } from './src/utils/Logger';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 
-// Ignore specific LogBox warnings
-LogBox.ignoreLogs([
-  'Text strings must be rendered within a <Text>',
-]);
+// Disable all LogBox warnings in development (optional)
+if (__DEV__) {
+  LogBox.ignoreAllLogs(true); // Uncomment this line to hide all warnings
+}
 
 export default function App() {
   useEffect(() => {
