@@ -31,6 +31,7 @@ async function migrateStorage(): Promise<void> {
       }
     } catch (error) {
       Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
+      migrationPromise = null;
     }
   })();
 
