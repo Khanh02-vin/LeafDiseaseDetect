@@ -18,15 +18,16 @@ async function migrateStorage(): Promise<void> {
     try {
       const oldData = await AsyncStorage.getItem(OLD_STORAGE_KEY);
       if (oldData) {
-        Logger.info(LogCategory.STORAGE, 'Migrating storage from old key to new key');
         const newData = await AsyncStorage.getItem(NEW_STORAGE_KEY);
         if (!newData) {
+          Logger.info(LogCategory.STORAGE, 'Migrating storage from old key to new key');
           await AsyncStorage.setItem(NEW_STORAGE_KEY, oldData);
-          await AsyncStorage.removeItem(OLD_STORAGE_KEY);
           Logger.success(LogCategory.STORAGE, 'Successfully migrated storage data');
         } else {
           Logger.info(LogCategory.STORAGE, 'New storage key already has data, skipping migration');
         }
+        await AsyncStorage.removeItem(OLD_STORAGE_KEY);
+        Logger.info(LogCategory.STORAGE, 'Removed old storage key');
       }
     } catch (error) {
       Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
@@ -42,9 +43,11 @@ const storageWithMigration = {
     return AsyncStorage.getItem(name);
   },
   setItem: async (name: string, value: string) => {
+    await migrateStorage();
     return AsyncStorage.setItem(name, value);
   },
   removeItem: async (name: string) => {
+    await migrateStorage();
     return AsyncStorage.removeItem(name);
   },
 };
