@@ -26,11 +26,13 @@ async function migrateStorage(): Promise<void> {
         } else {
           Logger.info(LogCategory.STORAGE, 'New storage key already has data, skipping migration');
         }
+        // Always remove old key to clean up, regardless of whether migration occurred
         await AsyncStorage.removeItem(OLD_STORAGE_KEY);
         Logger.info(LogCategory.STORAGE, 'Removed old storage key');
       }
     } catch (error) {
       Logger.error(LogCategory.STORAGE, 'Error migrating storage, will retry on next operation', error);
+      // Reset promise to allow retry on next storage operation
       migrationPromise = null;
     }
   })();
