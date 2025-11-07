@@ -2,6 +2,32 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClassificationResult, HistoryItem } from '../models/ClassificationResult';
+import { Logger, LogCategory } from '../utils/Logger';
+
+const OLD_STORAGE_KEY = 'orange-quality-checker-storage';
+const NEW_STORAGE_KEY = 'leaf-disease-checker-storage';
+
+async function migrateStorage() {
+  try {
+    const oldData = await AsyncStorage.getItem(OLD_STORAGE_KEY);
+    if (oldData) {
+      Logger.info(LogCategory.STORAGE, 'Migrating storage from old key to new key');
+      const newData = await AsyncStorage.getItem(NEW_STORAGE_KEY);
+      if (!newData) {
+        await AsyncStorage.setItem(NEW_STORAGE_KEY, oldData);
+        Logger.success(LogCategory.STORAGE, 'Successfully migrated storage data');
+      } else {
+        Logger.info(LogCategory.STORAGE, 'New storage key already has data, skipping migration');
+      }
+      await AsyncStorage.removeItem(OLD_STORAGE_KEY);
+      Logger.info(LogCategory.STORAGE, 'Removed old storage key');
+    }
+  } catch (error) {
+    Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
+  }
+}
+
+migrateStorage();
 
 interface AppState {
   // Theme
@@ -116,7 +142,7 @@ export const useAppStore = create<AppState>()(
       setError: (error) => set({ error }),
     }),
     {
-      name: 'leaf-disease-checker-storage',
+      name: NEW_STORAGE_KEY,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         isDarkMode: state.isDarkMode,
