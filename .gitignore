@@ -45,9 +45,12 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# Native build directories (native projects are now part of repo)
+ios/build/
+ios/Pods/
+android/build/
+android/app/build/
+android/.gradle/
 
 
 

@@ -24,7 +24,7 @@ export const LightTheme = {
     md: 8,
     lg: 12,
     xl: 16,
-    xl: 24,
+    xxl: 24,
   },
   fontSize: {
     xs: 12,

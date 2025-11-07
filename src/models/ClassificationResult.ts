@@ -12,7 +12,7 @@ export interface ClassificationResult {
   primaryResult: {
     label: string;
     confidence: number;
-    isOrange: boolean;
+    isLeaf: boolean;
   };
   
   // Fallback classification results
@@ -24,9 +24,9 @@ export interface ClassificationResult {
   
   // Quality analysis
   qualityAnalysis: {
-    isGoodQuality: boolean;
-    hasMold: boolean;
-    moldConfidence?: number;
+    isHealthy: boolean;
+    hasDiseased: boolean;
+    diseaseConfidence?: number;
     colorAnalysis: {
       dominantColor: string;
       brightness: number;
@@ -36,10 +36,9 @@ export interface ClassificationResult {
   
   // Image quality
   imageQuality: {
-    isValid: boolean;
+    isHighQuality: boolean;
     resolution: { width: number; height: number };
-    brightness: number;
-    blur: number;
+    fileSize: number;
     issues: string[];
   };
   

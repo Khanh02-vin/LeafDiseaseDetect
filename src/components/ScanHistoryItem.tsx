@@ -66,8 +66,8 @@ export const ScanHistoryItem: React.FC<ScanHistoryItemProps> = ({
         </View>
         
         <QualityBadge
-          isGoodQuality={result.qualityAnalysis.isGoodQuality}
-          hasMold={result.qualityAnalysis.hasMold}
+          isHealthy={result.qualityAnalysis.isHealthy}
+          hasDiseased={result.qualityAnalysis.hasDiseased}
           confidence={result.primaryResult.confidence}
           size="small"
         />

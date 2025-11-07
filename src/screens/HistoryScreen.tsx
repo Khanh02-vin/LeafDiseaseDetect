@@ -39,7 +39,7 @@ export const HistoryScreen: React.FC = () => {
     clearHistory();
   }, [clearHistory]);
 
-  const renderHistoryItem = useCallback(({ item }) => (
+  const renderHistoryItem = useCallback(({ item }: { item: any }) => (
     <ScanHistoryItem
       result={item.result}
       onPress={() => handleItemPress(item.id)}
@@ -51,8 +51,8 @@ export const HistoryScreen: React.FC = () => {
   const renderEmptyState = () => (
     <EmptyState
       title="No scans yet"
-      subtitle="Start by capturing an orange image to analyze its quality"
-      icon="🍊"
+      subtitle="Start by capturing a leaf image to analyze its health"
+      icon="🌿"
       action={
         <Button
           title="Start Scanning"

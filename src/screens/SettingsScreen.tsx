@@ -43,8 +43,8 @@ export const SettingsScreen: React.FC = () => {
 
   const handleAbout = () => {
     Alert.alert(
-      'About Orange Quality Checker',
-      'Version 1.0.0\n\nAn AI-powered app for analyzing orange quality using machine learning.',
+      'About Leaf Disease Checker',
+      'Version 1.0.0\n\nAn AI-powered app for detecting plant leaf diseases using machine learning.',
       [{ text: 'OK' }]
     );
   };
