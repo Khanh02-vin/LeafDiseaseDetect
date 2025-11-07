@@ -11,9 +11,8 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppStore } from '../store/useAppStore';
-import { OrangeClassifier } from '../services/OrangeClassifier';
+import { LeafDiseaseClassifier } from '../services/LeafDiseaseClassifier';
 import { Button } from '../components/Button';
-import { QualityBadge } from '../components/QualityBadge';
 import { Colors } from '../constants/colors';
 
 const { width, height } = Dimensions.get('window');
@@ -32,7 +31,7 @@ export const ColorDetectorScreen: React.FC = () => {
     isLoading 
   } = useAppStore();
 
-  const orangeClassifier = OrangeClassifier.getInstance();
+  const leafClassifier = LeafDiseaseClassifier.getInstance();
 
   const requestCameraPermission = useCallback(async () => {
     await requestPermission();
@@ -81,7 +80,7 @@ export const ColorDetectorScreen: React.FC = () => {
       setIsProcessing(true);
       setLoading(true);
       
-      const result = await orangeClassifier.classifyOrange(capturedImage);
+      const result = await leafClassifier.classifyLeafDisease(capturedImage);
       
       setCurrentScan(result);
       addToHistory(result);
@@ -96,15 +95,15 @@ export const ColorDetectorScreen: React.FC = () => {
       setIsProcessing(false);
       setLoading(false);
     }
-  }, [capturedImage, orangeClassifier, setCurrentScan, addToHistory, setLoading]);
+  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading]);
 
   const resetCamera = useCallback(() => {
     setCapturedImage(null);
   }, []);
 
   React.useEffect(() => {
-    orangeClassifier.initialize();
-  }, [orangeClassifier]);
+    leafClassifier.initialize();
+  }, [leafClassifier]);
 
   if (!permission) {
     return (
@@ -125,22 +124,22 @@ export const ColorDetectorScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Orange Quality Detector</Text>
-      <Text style={styles.subtitle}>Capture or select an image to analyze</Text>
+      <Text style={styles.title}>Leaf Disease Detector</Text>
+      <Text style={styles.subtitle}>Chụp hoặc chọn ảnh lá để phân tích tình trạng bệnh</Text>
 
       {capturedImage ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: capturedImage }} style={styles.image} />
           <View style={styles.imageOverlay}>
             <Button
-              title="Analyze"
+              title="Phân tích"
               onPress={analyzeImage}
               loading={isProcessing}
               disabled={isProcessing}
               style={styles.analyzeButton}
             />
             <Button
-              title="Retake"
+              title="Chụp lại"
               onPress={resetCamera}
               variant="outline"
               style={styles.retakeButton}
@@ -157,24 +156,24 @@ export const ColorDetectorScreen: React.FC = () => {
           
           {/* Overlay positioned absolutely over camera */}
           <View style={styles.cameraOverlay}>
-            {/* Orange detection circle overlay */}
+            {/* Leaf capture overlay */}
             <View style={styles.detectionOverlay}>
               <View style={styles.detectionCircle}>
                 <View style={styles.circleBorder} />
-                <Text style={styles.detectionText}>Position orange here</Text>
+                <Text style={styles.detectionText}>Đặt lá cây vào vùng này</Text>
               </View>
             </View>
             
             <View style={styles.cameraControls}>
               <Button
-                title="📷 Take Photo"
+                title="📷 Chụp ảnh"
                 onPress={takePicture}
                 loading={isLoading}
                 disabled={isLoading}
                 style={styles.captureButton}
               />
               <Button
-                title="📁 Gallery"
+                title="📁 Thư viện"
                 onPress={pickImage}
                 variant="outline"
                 style={styles.galleryButton}
@@ -185,18 +184,18 @@ export const ColorDetectorScreen: React.FC = () => {
       )}
 
       <View style={styles.instructions}>
-        <Text style={styles.instructionTitle}>How to use:</Text>
+        <Text style={styles.instructionTitle}>Hướng dẫn sử dụng:</Text>
         <Text style={styles.instructionText}>
-          1. Position the orange in the center of the frame
+          1. Đặt toàn bộ lá cây trong khung tròn
         </Text>
         <Text style={styles.instructionText}>
-          2. Ensure good lighting for best results
+          2. Đảm bảo ánh sáng rõ ràng, không bị chói
         </Text>
         <Text style={styles.instructionText}>
-          3. Tap capture or select from gallery
+          3. Chụp ảnh hoặc chọn từ thư viện
         </Text>
         <Text style={styles.instructionText}>
-          4. Wait for analysis to complete
+          4. Chờ hệ thống phân tích kết quả
         </Text>
       </View>
     </ScrollView>

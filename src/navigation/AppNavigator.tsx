@@ -58,7 +58,7 @@ const TabNavigator = () => {
         name="Detector"
         component={ColorDetectorScreen}
         options={{
-          title: 'Orange Detector',
+          title: 'Leaf Detector',
           headerShown: false,
         }}
       />

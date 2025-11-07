@@ -43,8 +43,8 @@ export const SettingsScreen: React.FC = () => {
 
   const handleAbout = () => {
     Alert.alert(
-      'About Orange Quality Checker',
-      'Version 1.0.0\n\nAn AI-powered app for analyzing orange quality using machine learning.',
+      'Về ứng dụng Plant Health Monitor',
+      'Phiên bản 1.0.0\n\nỨng dụng hỗ trợ chẩn đoán bệnh lá cây bằng mô hình học máy và các phép đo suy luận.',
       [{ text: 'OK' }]
     );
   };

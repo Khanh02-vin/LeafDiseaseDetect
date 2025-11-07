@@ -92,7 +92,7 @@ export const useAppStore = create<AppState>()(
         autoSave: true,
         locationTracking: true,
         notifications: true,
-        modelVersion: '1.0.0',
+        modelVersion: 'leaf-1.0.0',
         confidenceThreshold: 0.3,
       },
       updateSettings: (updates) => {
@@ -114,7 +114,7 @@ export const useAppStore = create<AppState>()(
       setError: (error) => set({ error }),
     }),
     {
-      name: 'orange-quality-checker-storage',
+      name: 'leaf-disease-detector-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         isDarkMode: state.isDarkMode,

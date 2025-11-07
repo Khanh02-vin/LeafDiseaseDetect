@@ -12,7 +12,9 @@ export interface ClassificationResult {
   primaryResult: {
     label: string;
     confidence: number;
-    isOrange: boolean;
+    isHealthy: boolean;
+    severity: 'low' | 'moderate' | 'high';
+    recommendedAction: string;
   };
   
   // Fallback classification results
@@ -24,13 +26,14 @@ export interface ClassificationResult {
   
   // Quality analysis
   qualityAnalysis: {
-    isGoodQuality: boolean;
-    hasMold: boolean;
-    moldConfidence?: number;
-    colorAnalysis: {
-      dominantColor: string;
-      brightness: number;
-      saturation: number;
+    isHealthy: boolean;
+    hasSpots: boolean;
+    diseaseSeverity: number;
+    symptomSummary: string;
+    stressIndicators: {
+      chlorosis: number;
+      necrosis: number;
+      pestDamage: number;
     };
   };
   

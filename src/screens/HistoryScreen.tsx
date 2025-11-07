@@ -50,12 +50,12 @@ export const HistoryScreen: React.FC = () => {
 
   const renderEmptyState = () => (
     <EmptyState
-      title="No scans yet"
-      subtitle="Start by capturing an orange image to analyze its quality"
-      icon="🍊"
+      title="Chưa có bản ghi"
+      subtitle="Bắt đầu bằng cách chụp ảnh lá cây để phân tích tình trạng sức khỏe"
+      icon="🌿"
       action={
         <Button
-          title="Start Scanning"
+          title="Bắt đầu quét"
           onPress={() => {
             // Navigate to camera screen
             console.log('Navigate to camera');
@@ -67,13 +67,13 @@ export const HistoryScreen: React.FC = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.title}>Scan History</Text>
+      <Text style={styles.title}>Lịch sử chẩn đoán</Text>
       <Text style={styles.subtitle}>
-        {history.length} scan{history.length !== 1 ? 's' : ''} recorded
+        Đã lưu {history.length} lần phân tích
       </Text>
       {history.length > 0 && (
         <Button
-          title="Clear All"
+          title="Xóa tất cả"
           onPress={handleClearHistory}
           variant="danger"
           size="small"
