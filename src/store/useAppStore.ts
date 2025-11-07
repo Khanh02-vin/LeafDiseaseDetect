@@ -30,15 +30,12 @@ async function migrateStorage(): Promise<void> {
         Logger.info(LogCategory.STORAGE, 'Removed old storage key');
       }
     } catch (error) {
-      Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
+      Logger.error(LogCategory.STORAGE, 'Error migrating storage, will retry on next operation', error);
       migrationPromise = null;
-      throw error;
     }
   })();
 
-  return migrationPromise.catch((error) => {
-    migrationPromise = null;
-  });
+  return migrationPromise;
 }
 
 const storageWithMigration = {
