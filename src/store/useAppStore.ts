@@ -7,27 +7,47 @@ import { Logger, LogCategory } from '../utils/Logger';
 const OLD_STORAGE_KEY = 'orange-quality-checker-storage';
 const NEW_STORAGE_KEY = 'leaf-disease-checker-storage';
 
-async function migrateStorage() {
-  try {
-    const oldData = await AsyncStorage.getItem(OLD_STORAGE_KEY);
-    if (oldData) {
-      Logger.info(LogCategory.STORAGE, 'Migrating storage from old key to new key');
-      const newData = await AsyncStorage.getItem(NEW_STORAGE_KEY);
-      if (!newData) {
-        await AsyncStorage.setItem(NEW_STORAGE_KEY, oldData);
-        Logger.success(LogCategory.STORAGE, 'Successfully migrated storage data');
-      } else {
-        Logger.info(LogCategory.STORAGE, 'New storage key already has data, skipping migration');
-      }
-      await AsyncStorage.removeItem(OLD_STORAGE_KEY);
-      Logger.info(LogCategory.STORAGE, 'Removed old storage key');
-    }
-  } catch (error) {
-    Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
+let migrationPromise: Promise<void> | null = null;
+
+async function migrateStorage(): Promise<void> {
+  if (migrationPromise) {
+    return migrationPromise;
   }
+
+  migrationPromise = (async () => {
+    try {
+      const oldData = await AsyncStorage.getItem(OLD_STORAGE_KEY);
+      if (oldData) {
+        Logger.info(LogCategory.STORAGE, 'Migrating storage from old key to new key');
+        const newData = await AsyncStorage.getItem(NEW_STORAGE_KEY);
+        if (!newData) {
+          await AsyncStorage.setItem(NEW_STORAGE_KEY, oldData);
+          await AsyncStorage.removeItem(OLD_STORAGE_KEY);
+          Logger.success(LogCategory.STORAGE, 'Successfully migrated storage data');
+        } else {
+          Logger.info(LogCategory.STORAGE, 'New storage key already has data, skipping migration');
+        }
+      }
+    } catch (error) {
+      Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
+    }
+  })();
+
+  return migrationPromise;
 }
 
-migrateStorage();
+const storageWithMigration = {
+  getItem: async (name: string) => {
+    await migrateStorage();
+    return AsyncStorage.getItem(name);
+  },
+  setItem: async (name: string, value: string) => {
+    return AsyncStorage.setItem(name, value);
+  },
+  removeItem: async (name: string) => {
+    return AsyncStorage.removeItem(name);
+  },
+};
 
 interface AppState {
   // Theme
@@ -143,7 +163,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: NEW_STORAGE_KEY,
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => storageWithMigration),
       partialize: (state) => ({
         isDarkMode: state.isDarkMode,
         history: state.history,
