@@ -1,12 +1,12 @@
-# Orange Quality Checker - React Native
+# Leaf Disease Checker - React Native
 
-Ứng dụng React Native để phân tích chất lượng cam sử dụng Machine Learning.
+Ứng dụng React Native để phát hiện bệnh trên lá cây sử dụng Machine Learning.
 
 ## Tính năng
 
-- 📷 Chụp ảnh cam hoặc chọn từ thư viện
-- 🤖 Phân tích chất lượng bằng AI (TensorFlow Lite)
-- 📊 Hiển thị kết quả chi tiết
+- 📷 Chụp ảnh lá cây hoặc chọn từ thư viện
+- 🤖 Phân tích bệnh bằng AI (TensorFlow Lite)
+- 📊 Hiển thị kết quả chi tiết về sức khỏe lá
 - 📱 Lưu lịch sử quét
 - 🎨 Dark/Light theme
 - 📍 Theo dõi vị trí
@@ -29,13 +29,13 @@ src/
 
 ## Machine Learning
 
-### Models được giữ nguyên từ Flutter:
-- `assets/ml_models/orange_classifier_cnn_improved.tflite` (13.3MB)
-- `assets/ml_models/orange_labels.txt`
+### Model:
+- `assets/model/plant_disease_model.tflite` - Model phát hiện bệnh lá cây
+- `assets/model/labels.txt` - Labels: Healthy Leaf, Diseased Leaf, Moldy Leaf
 
 ### TensorFlow Integration:
-- Sử dụng TensorFlow.js cho React Native
-- Hỗ trợ preprocessing và inference
+- Sử dụng react-native-fast-tflite cho TFLite inference
+- Hỗ trợ preprocessing và normalization
 - Fallback classification khi confidence thấp
 
 ## Cài đặt
@@ -83,8 +83,8 @@ EXPO_PUBLIC_MODEL_VERSION=1.0.0
 
 ### 1. Chụp ảnh:
 - Mở app và chọn "Detector"
-- Chụp ảnh cam hoặc chọn từ gallery
-- Đợi phân tích hoàn tất
+- Chụp ảnh lá cây hoặc chọn từ gallery
+- Đợi phân tích bệnh hoàn tất
 
 ### 2. Xem lịch sử:
 - Chọn tab "History"

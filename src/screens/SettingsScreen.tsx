@@ -43,8 +43,8 @@ export const SettingsScreen: React.FC = () => {
 
   const handleAbout = () => {
     Alert.alert(
-      'Về ứng dụng Plant Health Monitor',
-      'Phiên bản 1.0.0\n\nỨng dụng hỗ trợ chẩn đoán bệnh lá cây bằng mô hình học máy và các phép đo suy luận.',
+      'About Leaf Disease Checker',
+      'Version 1.0.0\n\nAn AI-powered app for detecting plant leaf diseases using machine learning.',
       [{ text: 'OK' }]
     );
   };

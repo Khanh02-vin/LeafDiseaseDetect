@@ -12,9 +12,7 @@ export interface ClassificationResult {
   primaryResult: {
     label: string;
     confidence: number;
-    isHealthy: boolean;
-    severity: 'low' | 'moderate' | 'high';
-    recommendedAction: string;
+    isLeaf: boolean;
   };
   
   // Fallback classification results
@@ -27,22 +25,20 @@ export interface ClassificationResult {
   // Quality analysis
   qualityAnalysis: {
     isHealthy: boolean;
-    hasSpots: boolean;
-    diseaseSeverity: number;
-    symptomSummary: string;
-    stressIndicators: {
-      chlorosis: number;
-      necrosis: number;
-      pestDamage: number;
+    hasDiseased: boolean;
+    diseaseConfidence?: number;
+    colorAnalysis: {
+      dominantColor: string;
+      brightness: number;
+      saturation: number;
     };
   };
   
   // Image quality
   imageQuality: {
-    isValid: boolean;
+    isHighQuality: boolean;
     resolution: { width: number; height: number };
-    brightness: number;
-    blur: number;
+    fileSize: number;
     issues: string[];
   };
   

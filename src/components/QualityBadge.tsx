@@ -4,59 +4,42 @@ import { Colors } from '../constants/colors';
 
 interface QualityBadgeProps {
   isHealthy: boolean;
-  hasSpots?: boolean;
-  severity?: 'low' | 'moderate' | 'high';
-  diseaseSeverity?: number;
+  hasDiseased?: boolean;
   confidence?: number;
   size?: 'small' | 'medium' | 'large';
 }
 
 export const QualityBadge: React.FC<QualityBadgeProps> = ({
   isHealthy,
-  hasSpots = false,
-  severity = 'low',
-  diseaseSeverity,
+  hasDiseased = false,
   confidence,
   size = 'medium',
 }) => {
   const getBadgeInfo = () => {
+    if (hasDiseased) {
+      return {
+        text: 'Disease Detected',
+        color: Colors.badQuality,
+        backgroundColor: Colors.badQuality + '20',
+      };
+    }
+    
     if (isHealthy) {
       return {
-        text: 'Lá khỏe mạnh',
-        color: Colors.success,
-        backgroundColor: Colors.success + '20',
+        text: 'Healthy Leaf',
+        color: Colors.goodQuality,
+        backgroundColor: Colors.goodQuality + '20',
       };
     }
-
-    if (severity === 'high') {
-      return {
-        text: 'Bệnh nặng',
-        color: Colors.error,
-        backgroundColor: Colors.error + '20',
-      };
-    }
-
-    if (severity === 'moderate' || hasSpots) {
-      return {
-        text: 'Bệnh phát triển',
-        color: Colors.warning,
-        backgroundColor: Colors.warning + '20',
-      };
-    }
-
+    
     return {
-      text: 'Bệnh nhẹ',
-      color: Colors.info,
-      backgroundColor: Colors.info + '20',
+      text: 'Unhealthy',
+      color: Colors.warning,
+      backgroundColor: Colors.warning + '20',
     };
   };
 
   const badgeInfo = getBadgeInfo();
-
-  const formattedSeverity =
-    !isHealthy && typeof diseaseSeverity === 'number'
-      ? `${Math.round(diseaseSeverity * 100)}%`
-      : undefined;
 
   return (
     <View style={[styles.container, styles[size], { backgroundColor: badgeInfo.backgroundColor }]}>
@@ -64,14 +47,9 @@ export const QualityBadge: React.FC<QualityBadgeProps> = ({
       <Text style={[styles.text, styles[`${size}Text`], { color: badgeInfo.color }]}>
         {badgeInfo.text}
       </Text>
-      {confidence !== undefined && (
+      {confidence && (
         <Text style={[styles.confidence, styles[`${size}Confidence`]]}>
           {Math.round(confidence * 100)}%
-        </Text>
-      )}
-      {formattedSeverity && (
-        <Text style={[styles.confidence, styles[`${size}Confidence`]]}>
-          {formattedSeverity}
         </Text>
       )}
     </View>

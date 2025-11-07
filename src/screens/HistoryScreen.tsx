@@ -39,7 +39,7 @@ export const HistoryScreen: React.FC = () => {
     clearHistory();
   }, [clearHistory]);
 
-  const renderHistoryItem = useCallback(({ item }) => (
+  const renderHistoryItem = useCallback(({ item }: { item: any }) => (
     <ScanHistoryItem
       result={item.result}
       onPress={() => handleItemPress(item.id)}
@@ -50,12 +50,12 @@ export const HistoryScreen: React.FC = () => {
 
   const renderEmptyState = () => (
     <EmptyState
-      title="Chưa có bản ghi"
-      subtitle="Bắt đầu bằng cách chụp ảnh lá cây để phân tích tình trạng sức khỏe"
+      title="No scans yet"
+      subtitle="Start by capturing a leaf image to analyze its health"
       icon="🌿"
       action={
         <Button
-          title="Bắt đầu quét"
+          title="Start Scanning"
           onPress={() => {
             // Navigate to camera screen
             console.log('Navigate to camera');
@@ -67,13 +67,13 @@ export const HistoryScreen: React.FC = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.title}>Lịch sử chẩn đoán</Text>
+      <Text style={styles.title}>Scan History</Text>
       <Text style={styles.subtitle}>
-        Đã lưu {history.length} lần phân tích
+        {history.length} scan{history.length !== 1 ? 's' : ''} recorded
       </Text>
       {history.length > 0 && (
         <Button
-          title="Xóa tất cả"
+          title="Clear All"
           onPress={handleClearHistory}
           variant="danger"
           size="small"

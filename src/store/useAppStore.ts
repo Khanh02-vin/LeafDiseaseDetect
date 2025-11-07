@@ -26,6 +26,7 @@ interface AppState {
     notifications: boolean;
     modelVersion: string;
     confidenceThreshold: number;
+    adaptiveThreshold: boolean;
   };
   updateSettings: (updates: Partial<AppState['settings']>) => void;
   
@@ -92,8 +93,9 @@ export const useAppStore = create<AppState>()(
         autoSave: true,
         locationTracking: true,
         notifications: true,
-        modelVersion: 'leaf-1.0.0',
-        confidenceThreshold: 0.3,
+        modelVersion: '1.0.0',
+        confidenceThreshold: 0.6,
+        adaptiveThreshold: true,
       },
       updateSettings: (updates) => {
         set((state) => ({
@@ -114,7 +116,7 @@ export const useAppStore = create<AppState>()(
       setError: (error) => set({ error }),
     }),
     {
-      name: 'leaf-disease-detector-storage',
+      name: 'leaf-disease-checker-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         isDarkMode: state.isDarkMode,

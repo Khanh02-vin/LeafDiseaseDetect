@@ -1,4 +1,15 @@
 import { registerRootComponent } from 'expo';
+import { LogBox } from 'react-native';
+
+// Suppress known warnings that don't affect functionality
+LogBox.ignoreLogs([
+  'Text strings must be rendered within a <Text>',
+]);
+
+// Ignore all LogBox warnings in production
+if (!__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 
 import App from './App';
 

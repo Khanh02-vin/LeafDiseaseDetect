@@ -67,24 +67,16 @@ export const ScanHistoryItem: React.FC<ScanHistoryItemProps> = ({
         
         <QualityBadge
           isHealthy={result.qualityAnalysis.isHealthy}
-          hasSpots={result.qualityAnalysis.hasSpots}
-          severity={result.primaryResult.severity}
-          diseaseSeverity={result.qualityAnalysis.diseaseSeverity}
+          hasDiseased={result.qualityAnalysis.hasDiseased}
           confidence={result.primaryResult.confidence}
           size="small"
         />
-
-        <Text style={styles.label}>{result.primaryResult.label}</Text>
         
         <Text style={styles.location}>{getLocationText()}</Text>
         
-        <Text style={styles.recommendation}>
-          {result.primaryResult.recommendedAction}
-        </Text>
-
         {result.fallbackResult && (
           <Text style={styles.fallbackInfo}>
-            Phương án dự phòng: {result.fallbackResult.reason}
+            Fallback: {result.fallbackResult.reason}
           </Text>
         )}
         
@@ -136,13 +128,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginTop: 6,
-  },
-  
   timestamp: {
     fontSize: 14,
     color: Colors.textSecondary,
@@ -172,12 +157,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.warning,
     fontStyle: 'italic',
-    marginTop: 4,
-  },
-  
-  recommendation: {
-    fontSize: 12,
-    color: Colors.textSecondary,
     marginTop: 4,
   },
   
