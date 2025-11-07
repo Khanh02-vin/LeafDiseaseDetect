@@ -32,10 +32,13 @@ async function migrateStorage(): Promise<void> {
     } catch (error) {
       Logger.error(LogCategory.STORAGE, 'Error migrating storage', error);
       migrationPromise = null;
+      throw error;
     }
   })();
 
-  return migrationPromise;
+  return migrationPromise.catch((error) => {
+    migrationPromise = null;
+  });
 }
 
 const storageWithMigration = {
