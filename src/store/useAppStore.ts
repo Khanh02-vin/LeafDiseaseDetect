@@ -52,16 +52,36 @@ export const useAppStore = create<AppState>()(
       // History
       history: [],
       addToHistory: (result: ClassificationResult) => {
-        const historyItem: HistoryItem = {
-          id: result.id,
-          imageUri: result.imageUri,
-          timestamp: result.timestamp,
-          result,
-          isFavorite: false,
-        };
-        set((state) => ({
-          history: [historyItem, ...state.history],
-        }));
+        const state = get();
+        // Kiểm tra xem result.id đã tồn tại trong history chưa
+        const existingIndex = state.history.findIndex(item => item.id === result.id);
+        
+        if (existingIndex >= 0) {
+          // Nếu đã tồn tại, cập nhật item đó thay vì thêm mới
+          set({
+            history: state.history.map((item, index) =>
+              index === existingIndex
+                ? {
+                    ...item,
+                    timestamp: result.timestamp,
+                    result,
+                  }
+                : item
+            ),
+          });
+        } else {
+          // Nếu chưa tồn tại, thêm mới
+          const historyItem: HistoryItem = {
+            id: result.id,
+            imageUri: result.imageUri,
+            timestamp: result.timestamp,
+            result,
+            isFavorite: false,
+          };
+          set({
+            history: [historyItem, ...state.history],
+          });
+        }
       },
       removeFromHistory: (id: string) => {
         set((state) => ({

@@ -44,10 +44,6 @@ export const ScanHistoryItem: React.FC<ScanHistoryItemProps> = ({
     }).format(dateObj);
   };
 
-  const getLocationText = () => {
-    if (!result.location) return 'No location';
-    return result.location.address || 'Location recorded';
-  };
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
@@ -74,27 +70,8 @@ export const ScanHistoryItem: React.FC<ScanHistoryItemProps> = ({
           size="small"
         />
 
-        <Text style={styles.label}>{result.primaryResult.label}</Text>
-        
-        <Text style={styles.location}>{getLocationText()}</Text>
-        
-        <Text style={styles.recommendation}>
-          {result.primaryResult.recommendedAction}
-        </Text>
-
-        {result.fallbackResult && (
-          <Text style={styles.fallbackInfo}>
-            Phương án dự phòng: {result.fallbackResult.reason}
-          </Text>
-        )}
-        
-        <View style={styles.metadata}>
-          <Text style={styles.metadataText}>
-            Processing: {result.processingTime}ms
-          </Text>
-          <Text style={styles.metadataText}>
-            Model: {result.modelVersion}
-          </Text>
+        <View style={styles.diseaseInfo}>
+          <Text style={styles.label}>{result.primaryResult.label}</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -136,13 +113,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   
+  diseaseInfo: {
+    marginTop: 6,
+  },
+
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
-    marginTop: 6,
   },
-  
+
   timestamp: {
     fontSize: 14,
     color: Colors.textSecondary,
@@ -162,33 +142,4 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
   
-  location: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  
-  fallbackInfo: {
-    fontSize: 11,
-    color: Colors.warning,
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  
-  recommendation: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  
-  metadata: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  
-  metadataText: {
-    fontSize: 10,
-    color: Colors.textSecondary,
-  },
 });

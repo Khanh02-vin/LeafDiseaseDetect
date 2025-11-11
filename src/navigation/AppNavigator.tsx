@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { ColorDetectorScreen } from '../screens/ColorDetectorScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
-import { SettingsScreen } from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -22,8 +21,6 @@ const TabNavigator = () => {
             iconName = focused ? 'camera' : 'camera-outline';
           } else if (route.name === 'History') {
             iconName = focused ? 'time' : 'time-outline';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'settings' : 'settings-outline';
           } else {
             iconName = 'help-outline';
           }
@@ -67,13 +64,6 @@ const TabNavigator = () => {
         component={HistoryScreen}
         options={{
           title: 'Scan History',
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: 'Settings',
         }}
       />
     </Tab.Navigator>

@@ -12,6 +12,7 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppStore } from '../store/useAppStore';
 import { LeafDiseaseClassifier } from '../services/LeafDiseaseClassifier';
+import { ClassificationResult } from '../models/ClassificationResult';
 import { Button } from '../components/Button';
 import { Colors } from '../constants/colors';
 
@@ -22,16 +23,16 @@ export const ColorDetectorScreen: React.FC = () => {
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<ClassificationResult | null>(null);
   
   const { 
     setCurrentScan, 
     addToHistory, 
     setLoading, 
     setError,
-    isLoading 
+    isLoading,
+    currentScan 
   } = useAppStore();
-
-  const leafClassifier = LeafDiseaseClassifier.getInstance();
 
   const requestCameraPermission = useCallback(async () => {
     await requestPermission();
@@ -43,9 +44,11 @@ export const ColorDetectorScreen: React.FC = () => {
     try {
       setLoading(true);
       const photo = await cameraRef.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         base64: false,
+        skipProcessing: false,
       });
+      // 使用整个图像，不进行裁剪
       setCapturedImage(photo.uri);
     } catch (error) {
       console.error('Failed to take picture:', error);
@@ -59,12 +62,12 @@ export const ColorDetectorScreen: React.FC = () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: false, // 不使用裁剪，使用整个图像
+        quality: 0.9,
       });
 
       if (!result.canceled && result.assets[0]) {
+        // 使用整个图像进行分析
         setCapturedImage(result.assets[0].uri);
       }
     } catch (error) {
@@ -74,36 +77,86 @@ export const ColorDetectorScreen: React.FC = () => {
   }, [setError]);
 
   const analyzeImage = useCallback(async () => {
-    if (!capturedImage) return;
+    if (!capturedImage) {
+      Alert.alert('Lỗi', 'Không có ảnh để phân tích. Vui lòng chụp hoặc chọn ảnh trước.');
+      return;
+    }
 
     try {
       setIsProcessing(true);
       setLoading(true);
+      setError(null);
       
-      const result = await leafClassifier.classifyLeafDisease(capturedImage);
+      console.log('Bắt đầu phân tích ảnh:', capturedImage);
       
-      setCurrentScan(result);
-      addToHistory(result);
+      // Đảm bảo classifier đã được khởi tạo
+      const classifier = LeafDiseaseClassifier.getInstance();
+      if (!classifier) {
+        throw new Error('Không thể khởi tạo classifier');
+      }
       
-      // Navigate to results screen
-      // navigation.navigate('ScanResult');
+      const result = await classifier.classifyLeafDisease(capturedImage);
+      
+      // 检查是否使用降级模式
+      if (classifier.isUsingFallbackMode && classifier.isUsingFallbackMode()) {
+        console.warn('正在使用降级模式（模拟分类）');
+      }
+      
+      console.log('Kết quả phân tích:', result);
+      
+      if (result && result.primaryResult) {
+        setCurrentScan(result);
+        addToHistory(result);
+        setAnalysisResult(result);
+      } else {
+        throw new Error('Kết quả phân tích không hợp lệ');
+      }
       
     } catch (error) {
-      console.error('Analysis failed:', error);
-      Alert.alert('Analysis Failed', 'Unable to analyze the image. Please try again.');
+      console.error('Lỗi khi phân tích:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Không thể phân tích ảnh. Vui lòng thử lại.';
+      setError(errorMessage);
+      Alert.alert('Lỗi phân tích', errorMessage);
     } finally {
       setIsProcessing(false);
       setLoading(false);
     }
-  }, [capturedImage, leafClassifier, setCurrentScan, addToHistory, setLoading]);
+  }, [capturedImage, setCurrentScan, addToHistory, setLoading, setError]);
 
   const resetCamera = useCallback(() => {
     setCapturedImage(null);
+    setAnalysisResult(null);
   }, []);
 
   React.useEffect(() => {
-    leafClassifier.initialize();
-  }, [leafClassifier]);
+    // Khởi tạo classifier khi component mount
+    const initClassifier = async () => {
+      try {
+        const classifier = LeafDiseaseClassifier.getInstance();
+        if (classifier) {
+          await classifier.initialize();
+          console.log('Classifier đã được khởi tạo thành công');
+        } else {
+          console.error('LeafDiseaseClassifier.getInstance() returned undefined');
+          // 不设置错误，让它在使用时自动初始化
+        }
+      } catch (error) {
+        console.error('Lỗi khởi tạo classifier:', error);
+        // 不设置错误状态，允许延迟初始化
+        // 错误会在实际使用时显示
+        const errorMessage = error instanceof Error ? error.message : 'Không thể khởi tạo hệ thống phân tích';
+        console.warn('初始化失败，将在使用时重试:', errorMessage);
+      }
+    };
+    
+    initClassifier();
+    
+    // Reset state khi component unmount để tránh state bị kẹt
+    return () => {
+      setIsProcessing(false);
+      setLoading(false);
+    };
+  }, [setError]);
 
   if (!permission) {
     return (
@@ -128,57 +181,83 @@ export const ColorDetectorScreen: React.FC = () => {
       <Text style={styles.subtitle}>Chụp hoặc chọn ảnh lá để phân tích tình trạng bệnh</Text>
 
       {capturedImage ? (
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: capturedImage }} style={styles.image} />
-          <View style={styles.imageOverlay}>
-            <Button
-              title="Phân tích"
-              onPress={analyzeImage}
-              loading={isProcessing}
-              disabled={isProcessing}
-              style={styles.analyzeButton}
-            />
-            <Button
-              title="Chụp lại"
-              onPress={resetCamera}
-              variant="outline"
-              style={styles.retakeButton}
+        <>
+          <View style={styles.imageContainer}>
+            <Image source={{ uri: capturedImage }} style={styles.image} />
+          </View>
+          {!analysisResult && (
+            <View style={styles.imageButtonsContainer}>
+              <Button
+                title={isProcessing ? "Đang phân tích..." : "Phân tích"}
+                onPress={analyzeImage}
+                loading={isProcessing || isLoading}
+                disabled={isProcessing || isLoading}
+                size="small"
+                style={styles.analyzeButton}
+              />
+              <Button
+                title="Chụp lại"
+                onPress={resetCamera}
+                variant="outline"
+                size="small"
+                style={styles.retakeButton}
+                disabled={isProcessing || isLoading}
+              />
+            </View>
+          )}
+        </>
+      ) : (
+        <>
+          <View style={styles.cameraContainer}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              ref={setCameraRef}
             />
           </View>
-        </View>
-      ) : (
-        <View style={styles.cameraContainer}>
-          <CameraView
-            style={styles.camera}
-            facing="back"
-            ref={setCameraRef}
-          />
-          
-          {/* Overlay positioned absolutely over camera */}
-          <View style={styles.cameraOverlay}>
-            {/* Leaf capture overlay */}
-            <View style={styles.detectionOverlay}>
-              <View style={styles.detectionCircle}>
-                <View style={styles.circleBorder} />
-                <Text style={styles.detectionText}>Đặt lá cây vào vùng này</Text>
-              </View>
-            </View>
-            
-            <View style={styles.cameraControls}>
-              <Button
-                title="📷 Chụp ảnh"
-                onPress={takePicture}
-                loading={isLoading}
-                disabled={isLoading}
-                style={styles.captureButton}
-              />
-              <Button
-                title="📁 Thư viện"
-                onPress={pickImage}
-                variant="outline"
-                style={styles.galleryButton}
-              />
-            </View>
+          <View style={styles.cameraButtonsContainer}>
+            <Button
+              title="📷 Chụp ảnh"
+              onPress={takePicture}
+              loading={isLoading}
+              disabled={isLoading}
+              size="small"
+              style={styles.captureButton}
+            />
+            <Button
+              title="📁 Thư viện"
+              onPress={pickImage}
+              variant="outline"
+              size="small"
+              style={styles.galleryButton}
+            />
+          </View>
+        </>
+      )}
+
+      {analysisResult && (
+        <View style={styles.resultContainer}>
+          <Text style={styles.resultTitle}>Kết quả phân tích</Text>
+          <View style={styles.resultBox}>
+            <Text style={[
+              styles.resultValue,
+              analysisResult.primaryResult.label === 'Lá phấn trắng' || 
+              analysisResult.primaryResult.label === 'Lá gỉ sắt' 
+                ? styles.resultValueDisease 
+                : styles.resultValueHealthy
+            ]}>
+              {analysisResult.primaryResult.label}
+            </Text>
+            <Text style={styles.resultConfidence}>
+              Độ tin cậy: {(analysisResult.primaryResult.confidence * 100).toFixed(1)}%
+            </Text>
+            <Button
+              title="Phân tích lại"
+              onPress={() => setAnalysisResult(null)}
+              variant="outline"
+              size="small"
+              style={styles.reanalyzeButton}
+            />
           </View>
         </View>
       )}
@@ -186,7 +265,7 @@ export const ColorDetectorScreen: React.FC = () => {
       <View style={styles.instructions}>
         <Text style={styles.instructionTitle}>Hướng dẫn sử dụng:</Text>
         <Text style={styles.instructionText}>
-          1. Đặt toàn bộ lá cây trong khung tròn
+          1. Đặt toàn bộ lá cây trong khung hình
         </Text>
         <Text style={styles.instructionText}>
           2. Đảm bảo ánh sáng rõ ràng, không bị chói
@@ -239,80 +318,35 @@ const styles = StyleSheet.create({
     height: height * 0.4,
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 24,
-    position: 'relative',
+    marginBottom: 12,
   },
   
   camera: {
     flex: 1,
   },
   
-  cameraOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-    justifyContent: 'space-between',
-  },
-  
-  detectionOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  
-  detectionCircle: {
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
-  circleBorder: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 3,
-    borderColor: '#FF6B35',
-    borderStyle: 'dashed',
-    position: 'absolute',
-  },
-  
-  detectionText: {
-    color: '#FF6B35',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 20,
-  },
-  
-  cameraControls: {
+  cameraButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 24,
+    paddingHorizontal: 16,
   },
   
   captureButton: {
     flex: 1,
-    marginRight: 8,
+    minHeight: 40,
+    maxWidth: 150,
   },
   
   galleryButton: {
     flex: 1,
-    marginLeft: 8,
+    minHeight: 40,
+    maxWidth: 150,
   },
   
   imageContainer: {
-    position: 'relative',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   
   image: {
@@ -321,26 +355,79 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  imageButtonsContainer: {
     flexDirection: 'row',
-    padding: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 24,
+    paddingHorizontal: 16,
   },
-  
+
   analyzeButton: {
     flex: 1,
-    marginRight: 8,
+    minHeight: 40,
+    maxWidth: 150,
   },
-  
+
   retakeButton: {
     flex: 1,
-    marginLeft: 8,
+    minHeight: 40,
+    maxWidth: 150,
+  },
+
+  resultContainer: {
+    marginBottom: 24,
+  },
+
+  resultTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+
+  resultBox: {
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border || '#E0E0E0',
+  },
+
+  resultLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 8,
+  },
+
+  resultValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+
+  resultValueDisease: {
+    color: '#DC2626',
+  },
+
+  resultValueHealthy: {
+    color: '#10B981',
+  },
+
+  resultConfidence: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 8,
+  },
+
+  resultSeverity: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+
+  reanalyzeButton: {
+    marginTop: 8,
   },
   
   instructions: {

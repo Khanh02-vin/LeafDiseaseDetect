@@ -88,7 +88,7 @@ export const HistoryScreen: React.FC = () => {
       <FlatList
         data={history}
         renderItem={renderHistoryItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
         refreshControl={

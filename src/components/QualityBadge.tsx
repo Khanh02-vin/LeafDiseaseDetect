@@ -28,6 +28,7 @@ export const QualityBadge: React.FC<QualityBadgeProps> = ({
       };
     }
 
+    // Hiển thị mức độ nghiêm trọng dựa trên severity
     if (severity === 'high') {
       return {
         text: 'Bệnh nặng',
