@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Orange Quality Checker",
-    "slug": "orange-quality-checker",
+    "name": "Leaf Disease Detector",
+    "slug": "leaf-disease-detector",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,12 +15,20 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "extra": {
+      "classifierApiUrl": "http://192.168.1.4:8000",
+      "eas": {
+        "projectId": "61a127a8-1cc6-422b-aaec-290c9331a8e6"
+      }
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to camera to capture orange images for quality analysis.",
-        "NSLocationWhenInUseUsageDescription": "This app needs location access to track scan locations for data collection."
-      }
+        "NSCameraUsageDescription": "This app needs access to the camera to capture leaf images for disease analysis.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to track scan locations for agronomy insights.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.example.leafdiseasedetector"
     },
     "android": {
       "adaptiveIcon": {
@@ -33,13 +41,9 @@
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.orangequalitychecker"
+      "package": "com.example.leafdiseasedetector"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,7 +52,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture orange images for quality analysis."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to capture leaf images for disease analysis."
         }
       ],
       [

@@ -1,5 +1,5 @@
 {
-  "name": "orangedetectrn",
+  "name": "leaf-disease-detector",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -21,6 +21,7 @@
     "expo": "~54.0.13",
     "expo-asset": "~12.0.9",
     "expo-camera": "~17.0.8",
+    "expo-dev-client": "~6.0.17",
     "expo-file-system": "~19.0.17",
     "expo-gl": "^16.0.7",
     "expo-image-manipulator": "^14.0.7",
@@ -48,6 +49,7 @@
     "@types/react": "~19.1.0",
     "@types/react-native": "^0.73.0",
     "jest": "^29.7.0",
+    "pngjs": "^7.0.0",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },

@@ -1,31 +1,64 @@
-﻿import type { TensorflowModel } from 'react-native-fast-tflite';
+﻿// Tránh import trực tiếp 'react-native-fast-tflite' khi chạy Expo Go.
+// Định nghĩa type tối thiểu để giữ type-safety cơ bản.
+type TensorflowModel = {
+  inputs: Array<{ shape: number[] }>;
+  outputs: Array<unknown>;
+  run: (input: unknown) => Promise<any[]>;
+};
 import { ClassificationResult } from '../models/ClassificationResult';
 import uuid from 'react-native-uuid';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system';
+// Sử dụng API legacy để tương thích SDK 54 (readAsStringAsync)
+import * as FileSystem from 'expo-file-system/legacy';
+import Constants from 'expo-constants';
 
 // Dynamic import module để tránh crash khi module không khả dụng
 let loadTensorflowModel: ((source: any, delegate?: string) => Promise<TensorflowModel>) | null = null;
 
-try {
-  const tfliteModule = require('react-native-fast-tflite');
-  loadTensorflowModel = tfliteModule.loadTensorflowModel;
-} catch (error) {
-      console.warn('react-native-fast-tflite module không khả dụng:', error);
-}
+const resolveRemoteApiUrl = (): string | null => {
+  let updatesExtra: Record<string, any> | undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const updatesModule = require('expo-updates') as { manifest?: { extra?: Record<string, any> } };
+    updatesExtra = updatesModule?.manifest?.extra;
+  } catch (error) {
+    updatesExtra = undefined;
+  }
 
-// Nhãn bệnh - Model TFLite có 3 phân loại
+  const sources: Array<Record<string, any> | undefined | null> = [
+    (Constants?.expoConfig as any)?.extra,
+    (Constants as any)?.manifest?.extra,
+    (Constants as any)?.manifest2?.extra,
+    updatesExtra,
+    typeof process !== 'undefined' ? (process.env as Record<string, any>) : undefined,
+  ];
+
+  for (const source of sources) {
+    if (!source) continue;
+    const value = source.classifierApiUrl || source.CLASSIFIER_API_URL || source.EXPO_PUBLIC_CLASSIFIER_API_URL;
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.replace(/\/$/, '');
+    }
+  }
+
+  return null;
+};
+
+const REMOTE_API_URL: string | null = resolveRemoteApiUrl();
+console.log('[LeafDiseaseClassifier] Remote API URL:', REMOTE_API_URL ?? 'not configured');
+
+// Nhãn bệnh - Thứ tự khớp đầu ra model: [Phấn trắng, Gỉ sắt, Bình thường]
 const DISEASE_LABELS = [
-  'Lá bình thường',      // Index 0
-  'Lá phấn trắng',       // Index 1
-  'Lá gỉ sắt'            // Index 2
+  'Lá phấn trắng',       // Index 0
+  'Lá gỉ sắt',           // Index 1
+  'Lá bình thường'       // Index 2
 ];
 
 // Mapping mức độ nghiêm trọng của bệnh
 const SEVERITY_MAP: Record<string, 'low' | 'moderate' | 'high'> = {
-  'Lá bình thường': 'low',
   'Lá phấn trắng': 'high',
-  'Lá gỉ sắt': 'high'
+  'Lá gỉ sắt': 'high',
+  'Lá bình thường': 'low'
 };
 
 // Mapping hành động khuyến nghị
@@ -40,6 +73,8 @@ export class LeafDiseaseClassifier {
   private model: TensorflowModel | null = null;
   private isInitialized: boolean = false;
   private useFallbackMode: boolean = false;
+  private useRemoteService: boolean = REMOTE_API_URL !== null;
+  private readonly remoteApiUrl: string | null = REMOTE_API_URL;
   private resultCache: Map<string, ClassificationResult> = new Map(); // Cache kết quả theo imageUri
   private readonly CONFIDENCE_THRESHOLD = 0.5; // Ngưỡng confidence tối thiểu
 
@@ -61,18 +96,30 @@ export class LeafDiseaseClassifier {
   }
 
   public async initialize(): Promise<void> {
+    // Nếu dùng dịch vụ đám mây, bỏ qua việc load native module
+    if (this.useRemoteService) {
+      this.isInitialized = true;
+      console.log('Classifier sử dụng Remote API, bỏ qua khởi tạo native');
+      return;
+    }
+
     if (this.isInitialized && this.model) {
       console.log('Classifier đã được khởi tạo trước đó');
       return;
     }
 
-    // Kiểm tra module có khả dụng không
+    // Tải module native khi cần
     if (!loadTensorflowModel) {
-      console.warn('react-native-fast-tflite module không khả dụng, sử dụng chế độ dự phòng');
-      this.useFallbackMode = true;
-      this.isInitialized = true;
-      console.log('Classifier đã khởi tạo ở chế độ dự phòng');
-      return;
+      try {
+        const tfliteModule = require('react-native-fast-tflite');
+        loadTensorflowModel = tfliteModule.loadTensorflowModel;
+      } catch (error) {
+        console.warn('react-native-fast-tflite module không khả dụng, sử dụng chế độ dự phòng');
+        this.useFallbackMode = true;
+        this.isInitialized = true;
+        console.log('Classifier đã khởi tạo ở chế độ dự phòng');
+        return;
+      }
     }
 
     try {
@@ -85,6 +132,9 @@ export class LeafDiseaseClassifier {
       console.log('Loading model from:', modelSource);
 
       // Sử dụng loadTensorflowModel để load model
+      if (!loadTensorflowModel) {
+        throw new Error('TFLite loader is not available');
+      }
       this.model = await loadTensorflowModel(
         modelSource,
         'default'
@@ -119,6 +169,16 @@ export class LeafDiseaseClassifier {
     if (this.resultCache.has(imageUri)) {
       console.log('Sử dụng kết quả từ cache cho:', imageUri);
       return this.resultCache.get(imageUri)!;
+    }
+
+    if (this.useRemoteService && this.remoteApiUrl) {
+      try {
+        const remoteResult = await this.classifyViaRemote(imageUri);
+        this.resultCache.set(imageUri, remoteResult);
+        return remoteResult;
+      } catch (error) {
+        console.error('Không thể phân tích qua dịch vụ đám mây:', error);
+      }
     }
 
     // Nếu chưa khởi tạo, thử khởi tạo tự động
@@ -380,7 +440,7 @@ export class LeafDiseaseClassifier {
     const symptomSummary = this.generateSymptomSummary(primaryLabel, primaryConfidence);
 
     return {
-      isHealthy: primaryLabel === 'Khỏe mạnh',
+      isHealthy: primaryLabel === 'Lá bình thường',
       hasSpots,
       diseaseSeverity,
       symptomSummary,
@@ -451,8 +511,78 @@ export class LeafDiseaseClassifier {
     return result;
   }
 
+  private async classifyViaRemote(imageUri: string): Promise<ClassificationResult> {
+    if (!this.remoteApiUrl) {
+      throw new Error('Remote API URL chưa được cấu hình. Hãy thiết lập extra.classifierApiUrl trong app.json');
+    }
+
+    console.log('Phân tích qua dịch vụ đám mây:', this.remoteApiUrl);
+
+    const base64 = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: 'base64',
+    });
+
+    const response = await fetch(`${this.remoteApiUrl}/classify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: base64,
+        metadata: {
+          source: 'mobile-app',
+          timestamp: Date.now(),
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Remote API error ${response.status}: ${text}`);
+    }
+
+    const data = await response.json();
+
+    const label: string = typeof data.label === 'string' ? data.label : 'Lá bình thường';
+    const confidence: number = typeof data.confidence === 'number' ? data.confidence : 0;
+    const scores: number[] = Array.isArray(data.scores) ? data.scores.map((v: any) => Number(v) || 0) : [];
+    console.log('[LeafDiseaseClassifier] Remote scores:', scores, '-> label:', label, 'confidence:', confidence);
+
+    const severity = SEVERITY_MAP[label] || 'low';
+    const isHealthy = label === 'Lá bình thường';
+
+    const qualityAnalysis = this.calculateQualityAnalysis(scores, label, confidence);
+
+    return {
+      id: uuid.v4() as string,
+      imageUri,
+      timestamp: new Date(),
+      primaryResult: {
+        label,
+        confidence,
+        isHealthy,
+        severity,
+        recommendedAction: RECOMMENDED_ACTIONS[label] || '',
+      },
+      qualityAnalysis,
+      imageQuality: {
+        isValid: confidence >= this.CONFIDENCE_THRESHOLD,
+        resolution: { width: 224, height: 224 },
+        brightness: 0.5,
+        blur: 0.1,
+        issues: [],
+      },
+      processingTime: typeof data.duration_ms === 'number' ? data.duration_ms : 0,
+      modelVersion: data.modelVersion || 'remote',
+      preprocessingApplied: ['remote-service'],
+      // Lưu scores để phục vụ debug nếu cần
+      // @ts-expect-error - field không định nghĩa trong interface nhưng hữu ích khi debug
+      scores,
+    };
+  }
+
   public isReady(): boolean {
-    return this.isInitialized;
+    return this.useRemoteService ? true : this.isInitialized;
   }
 
   public isUsingFallbackMode(): boolean {

@@ -1,16 +1,16 @@
-# Orange Quality Checker - React Native
+# Leaf Disease Detector - React Native
 
-Ứng dụng React Native để phân tích chất lượng cam sử dụng Machine Learning.
+Ứng dụng React Native sử dụng mô hình TensorFlow Lite để phát hiện bệnh trên lá cây.
 
 ## Tính năng
 
-- 📷 Chụp ảnh cam hoặc chọn từ thư viện
-- 🤖 Phân tích chất lượng bằng AI (TensorFlow Lite)
-- 📊 Hiển thị kết quả chi tiết
-- 📱 Lưu lịch sử quét
-- 🎨 Dark/Light theme
-- 📍 Theo dõi vị trí
-- 🔔 Thông báo
+- 📷 Chụp ảnh hoặc chọn ảnh lá cây từ thư viện
+- 🤖 Phân tích tình trạng bệnh lá bằng mô hình TFLite (chạy local hoặc qua dịch vụ backend)
+- 📊 Hiển thị nhãn bệnh, độ tin cậy và khuyến nghị xử lý
+- 🗂️ Lưu lịch sử các lần quét để theo dõi
+- 🎨 Hỗ trợ Dark/Light theme
+- 📍 Tùy chọn lưu vị trí quét
+- 🔔 Thông báo nhắc nhở
 
 ## Cấu trúc dự án
 
@@ -29,14 +29,14 @@ src/
 
 ## Machine Learning
 
-### Models được giữ nguyên từ Flutter:
-- `assets/ml_models/orange_classifier_cnn_improved.tflite` (13.3MB)
-- `assets/ml_models/orange_labels.txt`
+### Mô hình sử dụng
+- `assets/model/plant_disease_model.tflite`
+- Dịch vụ FastAPI (tuỳ chọn) cho phép chạy inference từ backend nếu không thể dùng native module trên thiết bị
 
-### TensorFlow Integration:
-- Sử dụng TensorFlow.js cho React Native
-- Hỗ trợ preprocessing và inference
-- Fallback classification khi confidence thấp
+### Tích hợp TensorFlow Lite
+- React Native + `react-native-fast-tflite` cho bản development build
+- Fallback qua dịch vụ FastAPI khi chạy bằng Expo Go
+- Caching kết quả theo ảnh để đảm bảo ổn định
 
 ## Cài đặt
 
@@ -50,7 +50,7 @@ src/
 ```bash
 # Clone repository
 git clone <repository-url>
-cd OrangeDetect
+cd LeafDiseaseDetector
 
 # Install dependencies
 npm install
@@ -81,20 +81,19 @@ EXPO_PUBLIC_MODEL_VERSION=1.0.0
 
 ## Sử dụng
 
-### 1. Chụp ảnh:
-- Mở app và chọn "Detector"
-- Chụp ảnh cam hoặc chọn từ gallery
-- Đợi phân tích hoàn tất
+### 1. Phân tích lá:
+- Mở app và chọn "Leaf Detector"
+- Chụp ảnh lá hoặc chọn ảnh có sẵn
+- Đợi kết quả phân tích và khuyến nghị
 
 ### 2. Xem lịch sử:
 - Chọn tab "History"
 - Xem danh sách các lần quét
 - Tap để xem chi tiết
 
-### 3. Cài đặt:
-- Chọn tab "Settings"
-- Thay đổi theme, notifications
-- Quản lý dữ liệu
+### 3. Lịch sử và tuỳ chỉnh
+- Tab "Scan History" lưu lại các lần chẩn đoán
+- Tab tuỳ chỉnh (nếu bật) cho phép thay đổi theme, thông báo, v.v.
 
 ## Thay đổi linh hoạt
 
@@ -142,7 +141,7 @@ npm test
 npm run test:coverage
 
 # Run specific test
-npm test -- --testNamePattern="OrangeClassifier"
+npm test -- --testNamePattern="LeafClassifier"
 ```
 
 ## Building
