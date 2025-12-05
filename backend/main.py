@@ -11,13 +11,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 
+# Ưu tiên dùng tflite-runtime (nhẹ và ổn định hơn trên nhiều môi trường).
+# Nếu không có thì fallback sang TensorFlow full với tf.lite.Interpreter.
 try:
-    import tensorflow as tf
+    import tflite_runtime.interpreter as tflite
+    USE_TFL_RUNTIME = True
 except ImportError:  # pragma: no cover
-    raise RuntimeError(
-        "TensorFlow is required. Install with `pip install tensorflow==2.17.0` "
-        "or `pip install tflite-runtime`."
-    )
+    try:
+        import tensorflow as tf
+        USE_TFL_RUNTIME = False
+    except ImportError:
+        raise RuntimeError(
+            "TensorFlow / TFLite runtime is required. Install with "
+            "`pip install tflite-runtime` hoặc `pip install tensorflow==2.17.0`."
+        )
 
 
 MODEL_PATH = os.getenv(
@@ -39,7 +46,10 @@ class LeafClassifier:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"TFLite model not found at {model_path}")
 
-        self.interpreter = tf.lite.Interpreter(model_path=model_path)
+        if USE_TFL_RUNTIME:
+            self.interpreter = tflite.Interpreter(model_path=model_path)
+        else:
+            self.interpreter = tf.lite.Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
@@ -74,6 +84,12 @@ class LeafClassifier:
         input_tensor = self.preprocess(image_base64)
         scores = self.infer(input_tensor)
 
+        # ⚠️ REMAP SCORES: Nếu kết quả bị đảo ngược, có thể train với thứ tự khác
+        # 
+        # Nếu "Lá phấn trắng" bị nhận thành "Lá gỉ sắt" và ngược lại → remap sai
+        # Thử không remap (giữ nguyên scores) để test
+        # Nếu vẫn sai → cần kiểm tra traing.class_indices trong Kaggle notebook
+        
         max_index = int(np.argmax(scores))
         confidence = float(scores[max_index])
 

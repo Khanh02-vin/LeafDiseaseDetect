@@ -16,7 +16,7 @@
       "**/*"
     ],
     "extra": {
-      "classifierApiUrl": "http://192.168.1.4:8000",
+      "classifierApiUrl": "http://192.168.1.5:8000",
       "eas": {
         "projectId": "61a127a8-1cc6-422b-aaec-290c9331a8e6"
       }
@@ -26,7 +26,23 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to the camera to capture leaf images for disease analysis.",
         "NSLocationWhenInUseUsageDescription": "This app needs location access to track scan locations for agronomy insights.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsArbitraryLoadsInWebContent": true,
+          "NSExceptionDomains": {
+            "192.168.1.5": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true,
+              "NSExceptionRequiresForwardSecrecy": false
+            },
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true,
+              "NSExceptionRequiresForwardSecrecy": false
+            }
+          }
+        }
       },
       "bundleIdentifier": "com.example.leafdiseasedetector"
     },
@@ -43,7 +59,8 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.example.leafdiseasedetector"
+      "package": "com.example.leafdiseasedetector",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

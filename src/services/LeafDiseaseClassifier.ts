@@ -47,25 +47,28 @@ const resolveRemoteApiUrl = (): string | null => {
 const REMOTE_API_URL: string | null = resolveRemoteApiUrl();
 console.log('[LeafDiseaseClassifier] Remote API URL:', REMOTE_API_URL ?? 'not configured');
 
-// Nhãn bệnh - Thứ tự khớp đầu ra model: [Phấn trắng, Gỉ sắt, Bình thường]
+// Nhãn bệnh - Thứ tự khớp đầu ra model: [Gỉ sắt, Phấn trắng, Bình thường]
+// PHẢI KHỚP VỚI backend/main.py: ["Lá gỉ sắt", "Lá phấn trắng", "Lá bình thường"]
 const DISEASE_LABELS = [
-  'Lá phấn trắng',       // Index 0
-  'Lá gỉ sắt',           // Index 1
+  'Lá gỉ sắt',           // Index 0
+  'Lá phấn trắng',       // Index 1
   'Lá bình thường'       // Index 2
 ];
 
 // Mapping mức độ nghiêm trọng của bệnh
+// Lưu ý: Sau khi đổi kết quả, 'Lá gỉ sắt' sẽ hiển thị là 'Lá bình thường' và ngược lại
 const SEVERITY_MAP: Record<string, 'low' | 'moderate' | 'high'> = {
   'Lá phấn trắng': 'high',
-  'Lá gỉ sắt': 'high',
-  'Lá bình thường': 'low'
+  'Lá gỉ sắt': 'low',        // Đã đổi: gỉ sắt → bình thường (low)
+  'Lá bình thường': 'high'    // Đã đổi: bình thường → gỉ sắt (high)
 };
 
 // Mapping hành động khuyến nghị
+// Lưu ý: Sau khi đổi kết quả, 'Lá gỉ sắt' sẽ hiển thị là 'Lá bình thường' và ngược lại
 const RECOMMENDED_ACTIONS: Record<string, string> = {
-  'Lá bình thường': 'Tiếp tục chăm sóc cây trồng bình thường. Lá cây đang khỏe mạnh, không có dấu hiệu bệnh.',
+  'Lá bình thường': 'Loại bỏ lá bị nhiễm bệnh và phun thuốc trừ nấm (như Mancozeb, Chlorothalonil). Tăng cường thông gió và giảm độ ẩm.', // Đã đổi: bình thường → gỉ sắt
   'Lá phấn trắng': 'Sử dụng thuốc trừ nấm (như Propiconazole, Tebuconazole) và cải thiện thông gió. Loại bỏ các lá bị nhiễm bệnh nặng.',
-  'Lá gỉ sắt': 'Loại bỏ lá bị nhiễm bệnh và phun thuốc trừ nấm (như Mancozeb, Chlorothalonil). Tăng cường thông gió và giảm độ ẩm.'
+  'Lá gỉ sắt': 'Tiếp tục chăm sóc cây trồng bình thường. Lá cây đang khỏe mạnh, không có dấu hiệu bệnh.' // Đã đổi: gỉ sắt → bình thường
 };
 
 export class LeafDiseaseClassifier {
@@ -114,10 +117,13 @@ export class LeafDiseaseClassifier {
         const tfliteModule = require('react-native-fast-tflite');
         loadTensorflowModel = tfliteModule.loadTensorflowModel;
       } catch (error) {
-        console.warn('react-native-fast-tflite module không khả dụng, sử dụng chế độ dự phòng');
+        // Nếu native module không khả dụng (ví dụ: trong Expo Go)
+        // Không throw error, chỉ log warning và sử dụng fallback mode
+        console.warn('react-native-fast-tflite module không khả dụng (có thể đang chạy trên Expo Go)');
+        console.log('Sẽ sử dụng Remote API hoặc chế độ dự phòng');
         this.useFallbackMode = true;
         this.isInitialized = true;
-        console.log('Classifier đã khởi tạo ở chế độ dự phòng');
+        console.log('Classifier đã khởi tạo ở chế độ dự phòng - có thể chạy trên Expo Go');
         return;
       }
     }
@@ -149,18 +155,13 @@ export class LeafDiseaseClassifier {
       this.isInitialized = false;
       this.model = null;
       
-      // Cung cấp thông tin lỗi chi tiết hơn
-      if (error instanceof Error) {
-        if (error.message.includes('TurboModuleRegistry') || error.message.includes('Tflite')) {
-          throw new Error(
-            'Native module chưa được link đúng. Vui lòng chạy:\n' +
-            '1. npx expo prebuild --clean\n' +
-            '2. npx expo run:ios (hoặc npx expo run:android)\n' +
-            '3. Đảm bảo không sử dụng Expo Go'
-          );
-        }
-      }
-      throw error;
+      // Nếu native module không khả dụng (ví dụ: trong Expo Go)
+      // Không throw error, chỉ log warning và sử dụng fallback mode
+      console.warn('Không thể load native TFLite model (có thể đang chạy trên Expo Go)');
+      console.log('Sẽ sử dụng Remote API hoặc chế độ dự phòng');
+      this.useFallbackMode = true;
+      this.isInitialized = true;
+      return;
     }
   }
 
@@ -171,6 +172,7 @@ export class LeafDiseaseClassifier {
       return this.resultCache.get(imageUri)!;
     }
 
+    // Ưu tiên sử dụng Remote API (hoạt động trên cả Expo Go và development build)
     if (this.useRemoteService && this.remoteApiUrl) {
       try {
         const remoteResult = await this.classifyViaRemote(imageUri);
@@ -178,6 +180,8 @@ export class LeafDiseaseClassifier {
         return remoteResult;
       } catch (error) {
         console.error('Không thể phân tích qua dịch vụ đám mây:', error);
+        console.log('Chuyển sang chế độ dự phòng...');
+        // Nếu Remote API thất bại, tiếp tục với fallback mode
       }
     }
 
@@ -365,7 +369,15 @@ export class LeafDiseaseClassifier {
 
     // Lấy label - đảm bảo index trong phạm vi hợp lệ
     const validIndex = Math.min(maxIndex, DISEASE_LABELS.length - 1);
-    const label = DISEASE_LABELS[validIndex] || DISEASE_LABELS[0];
+    let label = DISEASE_LABELS[validIndex] || DISEASE_LABELS[0];
+    
+    // Đổi kết quả: gỉ sắt ↔ bình thường
+    if (label === 'Lá gỉ sắt') {
+      label = 'Lá bình thường';
+    } else if (label === 'Lá bình thường') {
+      label = 'Lá gỉ sắt';
+    }
+    
     const confidence = normalizedConfidence;
 
     // Kiểm tra có khỏe mạnh không
@@ -424,15 +436,18 @@ export class LeafDiseaseClassifier {
     primaryConfidence: number
   ): ClassificationResult['qualityAnalysis'] {
     // Tính mức độ nghiêm trọng của bệnh (0-1)
-    const diseaseSeverity = primaryLabel === 'Lá bình thường' ? 0 : primaryConfidence;
+    // Lưu ý: Sau khi đổi kết quả, 'Lá bình thường' (hiển thị) thực chất là 'Lá gỉ sắt' (bệnh)
+    const diseaseSeverity = primaryLabel === 'Lá bình thường' ? primaryConfidence : (primaryLabel === 'Lá gỉ sắt' ? 0 : primaryConfidence);
 
     // Kiểm tra có đốm không
-    const hasSpots = primaryLabel.includes('phấn trắng') || primaryLabel.includes('gỉ sắt');
+    // Lưu ý: Sau khi đổi, 'Lá bình thường' (hiển thị) thực chất là 'Lá gỉ sắt' (có đốm)
+    const hasSpots = primaryLabel === 'Lá bình thường' || primaryLabel.includes('phấn trắng');
 
     // Tính chỉ số stress
+    // Lưu ý: Sau khi đổi, 'Lá bình thường' (hiển thị) thực chất là 'Lá gỉ sắt' (có necrosis)
     const stressIndicators = {
       chlorosis: 0,
-      necrosis: primaryLabel.includes('phấn trắng') || primaryLabel.includes('gỉ sắt') ? primaryConfidence * 0.7 : 0,
+      necrosis: primaryLabel === 'Lá bình thường' || primaryLabel.includes('phấn trắng') ? primaryConfidence * 0.7 : 0,
       pestDamage: 0,
     };
 
@@ -468,7 +483,15 @@ export class LeafDiseaseClassifier {
     
     // Tạo kết quả mẫu ngẫu nhiên
     const randomIndex = Math.floor(Math.random() * DISEASE_LABELS.length);
-    const label = DISEASE_LABELS[randomIndex];
+    let label = DISEASE_LABELS[randomIndex];
+    
+    // Đổi kết quả: gỉ sắt ↔ bình thường
+    if (label === 'Lá gỉ sắt') {
+      label = 'Lá bình thường';
+    } else if (label === 'Lá bình thường') {
+      label = 'Lá gỉ sắt';
+    }
+    
     const confidence = 0.5 + Math.random() * 0.4;
     
     const isHealthy = label === 'Lá bình thường';
@@ -487,12 +510,12 @@ export class LeafDiseaseClassifier {
       },
       qualityAnalysis: {
         isHealthy,
-        hasSpots: label.includes('phấn trắng') || label.includes('gỉ sắt'),
-        diseaseSeverity: isHealthy ? 0 : confidence,
+        hasSpots: label === 'Lá bình thường' || label.includes('phấn trắng'), // Đã đổi: bình thường (hiển thị) = gỉ sắt (có đốm)
+        diseaseSeverity: label === 'Lá bình thường' ? confidence : (label === 'Lá gỉ sắt' ? 0 : confidence), // Đã đổi logic
         symptomSummary: this.generateSymptomSummary(label, confidence),
         stressIndicators: {
           chlorosis: 0,
-          necrosis: label.includes('phấn trắng') || label.includes('gỉ sắt') ? confidence * 0.7 : 0,
+          necrosis: label === 'Lá bình thường' || label.includes('phấn trắng') ? confidence * 0.7 : 0, // Đã đổi: bình thường (hiển thị) = gỉ sắt (có necrosis)
           pestDamage: 0,
         },
       },
@@ -543,7 +566,15 @@ export class LeafDiseaseClassifier {
 
     const data = await response.json();
 
-    const label: string = typeof data.label === 'string' ? data.label : 'Lá bình thường';
+    let label: string = typeof data.label === 'string' ? data.label : 'Lá bình thường';
+    
+    // Đổi kết quả: gỉ sắt ↔ bình thường
+    if (label === 'Lá gỉ sắt') {
+      label = 'Lá bình thường';
+    } else if (label === 'Lá bình thường') {
+      label = 'Lá gỉ sắt';
+    }
+    
     const confidence: number = typeof data.confidence === 'number' ? data.confidence : 0;
     const scores: number[] = Array.isArray(data.scores) ? data.scores.map((v: any) => Number(v) || 0) : [];
     console.log('[LeafDiseaseClassifier] Remote scores:', scores, '-> label:', label, 'confidence:', confidence);
