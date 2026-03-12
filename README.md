@@ -50,7 +50,7 @@ src/
 ```bash
 # Clone repository
 git clone <repository-url>
-cd OrangeDetect
+cd LeafDiseaseDetect
 
 # Install dependencies
 npm install
