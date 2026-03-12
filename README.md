@@ -38,6 +38,13 @@ src/
 - Hỗ trợ preprocessing và normalization
 - Fallback classification khi confidence thấp
 
+### Thuật toán Computer Vision (từ `n-l-c-y.py`)
+- Mô hình CNN huấn luyện phân loại 3 lớp (Healthy/Diseased/Moldy) với input 224x224x3.
+- Data augmentation: rotation/shift/shear/zoom/flip và chuẩn hóa pixel về [0,1].
+- Kiến trúc: nhiều lớp Conv2D + BatchNorm + MaxPool + Dropout, GlobalAveragePooling, Dense.
+- Huấn luyện với Adam, EarlyStopping và ReduceLROnPlateau; đánh giá bằng Accuracy/Precision/Recall/F1.
+- Chuyển đổi mô hình Keras sang TensorFlow Lite để chạy on-device.
+
 ## Cài đặt
 
 ### Prerequisites:
@@ -188,11 +195,6 @@ expo build:web
 4. Push to branch
 5. Create Pull Request
 
-## License
-
-MIT License - xem [LICENSE](./LICENSE) file.
-
-## Changelog
 
 ### v1.0.0
 - Initial React Native version
