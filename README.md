@@ -28,7 +28,7 @@ src/
 ```
 
 ## Machine Learning
-### Dataset:https://huggingface.co/datasets/Khanh510/Plant_disease_recognition
+### Dataset: https://huggingface.co/datasets/Khanh510/Plant_disease_recognition
 ### Model:
 - `assets/model/plant_disease_model.tflite` - Model phát hiện bệnh lá cây
 - `assets/model/labels.txt` - Labels: Healthy Leaf, Diseased Leaf, Moldy Leaf
