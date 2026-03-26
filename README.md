@@ -9,8 +9,6 @@
 - 📊 Hiển thị kết quả chi tiết về sức khỏe lá
 - 📱 Lưu lịch sử quét
 - 🎨 Dark/Light theme
-- 📍 Theo dõi vị trí
-- 🔔 Thông báo
 
 ## Cấu trúc dự án
 
