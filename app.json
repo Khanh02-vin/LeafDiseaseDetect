@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Leaf Disease Checker",
+    "slug": "leaf-disease-checker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#4CAF50"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to capture plant leaf images for disease analysis.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to track scan locations for data collection."
+      },
+      "bundleIdentifier": "com.reina.leafcheck"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4CAF50"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.reina.leafcheck"
+    },
+    "web": {
+    }
+  }
+}
